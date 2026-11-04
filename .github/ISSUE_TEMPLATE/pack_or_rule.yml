@@ -1,0 +1,12 @@
+name: New starter pack / security rule / domain
+description: Propose a curated pack, a scanner rule, or a new domain
+labels: [community]
+body:
+  - type: dropdown
+    id: kind
+    attributes: { label: Type, options: [Starter pack, Security rule, Domain / keywords, False positive report] }
+    validations: { required: true }
+  - type: textarea
+    id: details
+    attributes: { label: Details, description: "Repos (owner/repo) for packs; sample text + expected severity for rules; output of `vault scan <repo>` for false positives." }
+    validations: { required: true }
