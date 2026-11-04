@@ -1,0 +1,15 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What happened?, description: "Command you ran, what you expected, what you got." }
+    validations: { required: true }
+  - type: textarea
+    id: doctor
+    attributes: { label: Output of `vault doctor`, render: text }
+  - type: input
+    id: env
+    attributes: { label: OS and Node version, placeholder: "Windows 11, Node 22.11" }
+    validations: { required: true }
