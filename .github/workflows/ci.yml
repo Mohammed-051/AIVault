@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [18, 20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node tests/run.mjs
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          export AIVAULT_HOME="$RUNNER_TEMP/vault"
+          node engine/cli.mjs init
+          node engine/cli.mjs add tests/fixtures/benign-skill
+          node engine/cli.mjs route "defend my app against prompt injection"
+          node engine/cli.mjs doctor
