@@ -1,0 +1,10 @@
+{
+  "name": "content-marketing",
+  "description": "Marketing and content: SEO, copywriting, CRO, launches, ads, email, social.",
+  "sources": [
+    {
+      "source": "coreyhaines31/marketingskills",
+      "domain": "content-marketing"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "name": "aivault",
+  "version": "1.1.0",
+  "description": "One library and router for every AI skill, connector and tool: paste a repo link, it gets security-scanned, sorted and routed. Zero dependencies.",
+  "type": "module",
+  "bin": {
+    "vault": "engine/cli.mjs",
+    "vault-mcp": "engine/mcp.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent-skills",
+    "skills",
+    "mcp",
+    "mcp-server",
+    "skill-manager",
+    "router",
+    "security-scanner",
+    "prompt-injection",
+    "ai-agents",
+    "cursor",
+    "copilot"
+  ],
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "setup": "node engine/cli.mjs setup"
+  },
+  "files": [
+    "engine",
+    "packs",
+    "assets/banner.svg",
+    "vault",
+    "vault.cmd",
+    "setup.cmd",
+    "setup.sh",
+    "README.md",
+    "LICENSE"
+  ]
+}

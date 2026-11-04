@@ -1,0 +1,21 @@
+{
+  "name": "essentials",
+  "description": "Base layer for everyone: terse replies, minimal code, core engineering workflow, Anthropic's official skills (documents, design, skill authoring).",
+  "sources": [
+    {
+      "source": "amanattar/caveman-claude-skill"
+    },
+    {
+      "source": "dietrichgebert/ponytail"
+    },
+    {
+      "source": "mattpocock/skills"
+    },
+    {
+      "source": "obra/superpowers"
+    },
+    {
+      "source": "anthropics/skills"
+    }
+  ]
+}

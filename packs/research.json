@@ -1,0 +1,10 @@
+{
+  "name": "research",
+  "description": "Science and research: 100+ scientific skills (bioinformatics, chemistry, data analysis, literature).",
+  "sources": [
+    {
+      "source": "K-Dense-AI/claude-scientific-skills",
+      "domain": "research"
+    }
+  ]
+}

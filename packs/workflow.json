@@ -1,0 +1,15 @@
+{
+  "name": "workflow",
+  "description": "Agent workflow systems: spec-driven building (GSD), context savings (Context Mode), token proxy (Tamp).",
+  "sources": [
+    {
+      "source": "gsd-build/get-shit-done"
+    },
+    {
+      "source": "mksglu/context-mode"
+    },
+    {
+      "source": "sliday/tamp"
+    }
+  ]
+}

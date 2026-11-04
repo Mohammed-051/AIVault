@@ -1,0 +1,15 @@
+{
+  "name": "connectors",
+  "description": "MCP server sources and directories: official reference servers, GitHub's server, community list.",
+  "sources": [
+    {
+      "source": "modelcontextprotocol/servers"
+    },
+    {
+      "source": "github/github-mcp-server"
+    },
+    {
+      "source": "win4r/Awesome-Claude-MCP-Servers"
+    }
+  ]
+}

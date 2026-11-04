@@ -1,0 +1,15 @@
+{
+  "name": "frontend-design",
+  "description": "UI engineering and design: distinctive frontends, UI/UX intelligence, design audits.",
+  "sources": [
+    {
+      "source": "https://github.com/anthropics/skills/tree/main/skills/frontend-design"
+    },
+    {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill"
+    },
+    {
+      "source": "bencium/bencium-claude-code-design-skill"
+    }
+  ]
+}

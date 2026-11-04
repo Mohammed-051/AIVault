@@ -1,0 +1,14 @@
+{
+  "name": "media",
+  "description": "Video and motion: Remotion programmatic video, cutting talking-head footage.",
+  "sources": [
+    {
+      "source": "remotion-dev/skills",
+      "domain": "media"
+    },
+    {
+      "source": "louisedesadeleer/cut-video",
+      "domain": "media"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "documents",
+  "description": "Office files: Word, PDF, PowerPoint, Excel (Anthropic's official document skills).",
+  "sources": [
+    {
+      "source": "anthropics/skills",
+      "only": [
+        "docx",
+        "pdf",
+        "pptx",
+        "xlsx"
+      ]
+    }
+  ]
+}
