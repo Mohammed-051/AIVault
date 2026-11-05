@@ -11,16 +11,16 @@ function vectors(items) {
   const toks = items.map((s) => {
     const name = tokenize(s.name.replace(/[-_]/g, ' ')).filter((t) => !GENERIC.has(t));
     const desc = tokenize(`${s.desc} ${s.heads || ''}`).filter((t) => !GENERIC.has(t));
-    const tf = {};
+    const tf = Object.create(null);
     for (const t of name) tf[t] = (tf[t] || 0) + 3;
     for (const t of desc) tf[t] = (tf[t] || 0) + 1;
     return { tf, name: new Set(name) };
   });
-  const df = {};
+  const df = Object.create(null);
   for (const { tf } of toks) for (const t of Object.keys(tf)) df[t] = (df[t] || 0) + 1;
   const N = items.length;
   return toks.map(({ tf, name }) => {
-    const v = {}; let norm = 0;
+    const v = Object.create(null); let norm = 0;
     for (const [t, f] of Object.entries(tf)) { const w = (1 + Math.log(f)) * Math.log(1 + N / df[t]); v[t] = w; norm += w * w; }
     norm = Math.sqrt(norm) || 1;
     for (const t of Object.keys(v)) v[t] /= norm;
@@ -70,11 +70,11 @@ export function findOverlaps(catalog, cfg, { threshold = 0.3 } = {}) {
       const members = idx.map((i) => items[i]);
       if (new Set(members.map((m) => m.source)).size < 2) continue;
       // Shared words make the label: the job these items have in common.
-      const counts = {};
+      const counts = Object.create(null);
       for (const i of idx) for (const t of Object.keys(vec[i].v)) counts[t] = (counts[t] || 0) + 1;
       const label = Object.entries(counts).filter(([, c]) => c >= Math.max(2, Math.ceil(idx.length * 0.6))).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t);
       let best = 0; for (const [k, s] of sims) { const [i, j] = k.split(',').map(Number); if (idx.includes(i) && idx.includes(j)) best = Math.max(best, s); }
-      const preferred = members.find((m) => cfg.prefer?.[m.id]);
+      const preferred = members.find((m) => Object.hasOwn(cfg.prefer || {}, m.id));
       members.sort((a, b) => (b === preferred) - (a === preferred) || rank(a.source) - rank(b.source) || b.desc.length - a.desc.length);
       groups.push({ kind, label: members[0].name.replace(/[-_]+/g, ' '), words: label, members, similarity: +best.toFixed(2), resolved: !!preferred, suggest: members[0].id });
     }

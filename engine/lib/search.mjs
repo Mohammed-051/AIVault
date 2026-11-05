@@ -10,13 +10,14 @@ import { PHASES, phaseById } from './phases.mjs';
 import { classify } from './scan.mjs';
 
 const STOP = new Set('a an and are as at be by for from how i in is it its my me of on or so that the this to we with you your want need help please can could should would do does using use make build create work working after before about into some any just get got new few minutes minute set up'.split(' '));
-const SYN = {
+// Null-prototype maps: a skill word like "constructor" must not hit Object.prototype.
+const SYN = Object.assign(Object.create(null), {
   esp: ['esp32'], cpp: ['c++'], js: ['javascript'], ts: ['typescript'], ui: ['frontend'], ux: ['design'],
   ppt: ['pptx'], deck: ['pptx', 'slides'], slides: ['pptx'], doc: ['docx'], word: ['docx'], spreadsheet: ['xlsx', 'excel'],
   robotic: ['humanize'], humanlike: ['humanize'], blog: ['article'], tweet: ['twitter'], db: ['database'], ml: ['machine'],
   tdd: ['test', 'driven'], e2e: ['end', 'test'], pr: ['pull', 'request'], i18n: ['internationalization'], a11y: ['accessibility'],
   stall: ['hang', 'debug'], crash: ['debug'], freeze: ['hang', 'debug'], bug: ['debug'], vid: ['video'],
-};
+});
 // Light stemming so "stalls/stalled/stalling" and "humanize/humanizing" match, without prefix false-positives.
 const stem = (t) => t.length <= 4 ? t : t.replace(/(ization|isation|ations|ation|ings|ing|izes|ized|ize|ises|ised|ise|ers|er|ates|ate|ies|es|ed|ly|s)$/, '') || t;
 export const tokenize = (s) => String(s || '').toLowerCase().replace(/c\+\+/g, ' cpp ').split(/[^a-z0-9]+/)

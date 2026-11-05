@@ -92,7 +92,7 @@ export function compare(prev = { skills: {} }, next = { skills: {} }) {
   const out = { addedSkills: [], removedSkills: [], changed: [], newPerms: [], changedScripts: [], textChanges: 0 };
   const isScript = (f) => /\.(sh|bash|zsh|ps1|psm1|bat|cmd|py|js|mjs|cjs|ts|rb|pl|php|go|rs|lua|vbs)$/i.test(f);
   for (const [dir, n] of Object.entries(next.skills)) {
-    const o = prev.skills[dir];
+    const o = Object.hasOwn(prev.skills, dir) ? prev.skills[dir] : undefined;
     const label = n.kind === 'agent' ? `${n.name} (agent)` : n.name;
     if (!o) {
       out.addedSkills.push({ dir, name: label, perms: n.perms });
@@ -100,8 +100,8 @@ export function compare(prev = { skills: {} }, next = { skills: {} }) {
       continue;
     }
     const files = { added: [], removed: [], modified: [] };
-    for (const [f, h] of Object.entries(n.files)) { if (!(f in o.files)) files.added.push(f); else if (o.files[f] !== h) files.modified.push(f); }
-    for (const f of Object.keys(o.files)) if (!(f in n.files)) files.removed.push(f);
+    for (const [f, h] of Object.entries(n.files)) { if (!Object.hasOwn(o.files, f)) files.added.push(f); else if (o.files[f] !== h) files.modified.push(f); }
+    for (const f of Object.keys(o.files)) if (!Object.hasOwn(n.files, f)) files.removed.push(f);
     const gained = added(o.perms, n.perms, 1);
     const lost = (o.perms || []).filter((t) => !n.perms.includes(t));
     if (!files.added.length && !files.removed.length && !files.modified.length && !gained.length && !lost.length) continue;
@@ -110,7 +110,7 @@ export function compare(prev = { skills: {} }, next = { skills: {} }) {
     for (const f of [...files.added, ...files.modified]) if (isScript(f)) out.changedScripts.push(filePath(dir, f));
     out.textChanges += files.modified.length + files.added.length + files.removed.length;
   }
-  for (const [dir, o] of Object.entries(prev.skills)) if (!next.skills[dir]) out.removedSkills.push({ dir, name: o.kind === 'agent' ? `${o.name} (agent)` : o.name });
+  for (const [dir, o] of Object.entries(prev.skills)) if (!Object.hasOwn(next.skills, dir)) out.removedSkills.push({ dir, name: o.kind === 'agent' ? `${o.name} (agent)` : o.name });
   out.any = !!(out.addedSkills.length || out.removedSkills.length || out.changed.length);
   return out;
 }
@@ -146,7 +146,7 @@ export function verifySource(entry, root) {
       else { try { if (hashFile(full) !== h) res.changed.push(relf); } catch { res.missing.push(relf); } }
     }
     const pre = dir === '.' ? '' : `${dir}/`;
-    if (!isAgentKey(dir) && !sk.partial && exists(base)) for (const f of skillFiles(base).files) if (!(f.rel in sk.files)) res.extra.push(pre + f.rel);
+    if (!isAgentKey(dir) && !sk.partial && exists(base)) for (const f of skillFiles(base).files) if (!Object.hasOwn(sk.files, f.rel)) res.extra.push(pre + f.rel);
   }
   res.ok = !res.changed.length && !res.missing.length && !res.extra.length;
   return res;
@@ -154,24 +154,31 @@ export function verifySource(entry, root) {
 
 // Is this file (absolute, real path) the approved version? Used by vault_read on every open.
 export function checkFile(real, relp, cfg, sourceRoot, lock = loadLock()) {
-  const src = cfg.sources.find((s) => s.path && (relp === s.path || relp.startsWith(s.path + '/')));
+  // Match by resolved path, so symlinked folders (macOS /var → /private/var, junctions) still match.
+  let base = null;
+  const src = cfg.sources.find((s) => {
+    if (!s.path) return false;
+    let b = sourceRoot(s); try { b = fs.realpathSync(b); } catch { return false; }
+    if (real === b || real.startsWith(b + path.sep)) { base = b; return true; }
+    return false;
+  });
   if (!src) return { status: 'vault' };
-  const entry = lock.sources[src.name];
-  if (!entry || src.type === 'local') return { status: 'unlocked', src };
-  let base = sourceRoot(src); try { base = fs.realpathSync(base); } catch {}
+  const catalogPath = rel(path.join(sourceRoot(src), path.relative(base, real)));
+  const entry = Object.hasOwn(lock.sources, src.name) ? lock.sources[src.name] : null;
+  if (!entry || src.type === 'local') return { status: 'unlocked', src, catalogPath };
   const inSrc = path.relative(base, real).split(path.sep).join('/');
-  if (inSrc.startsWith('..')) return { status: 'uncovered', src };
-  const ag = entry.skills[`agent:${inSrc}`];
-  if (ag) return { status: hashFile(real) === Object.values(ag.files)[0] ? 'ok' : 'changed', src, skill: ag, dir: `agent:${inSrc}`, entry };
+  if (inSrc.startsWith('..')) return { status: 'uncovered', src, catalogPath };
+  const ag = Object.hasOwn(entry.skills, `agent:${inSrc}`) ? entry.skills[`agent:${inSrc}`] : null;
+  if (ag) return { status: hashFile(real) === Object.values(ag.files)[0] ? 'ok' : 'changed', src, skill: ag, dir: `agent:${inSrc}`, entry, catalogPath };
   const dirs = Object.keys(entry.skills).filter((d) => !isAgentKey(d)).sort((a, b) => b.length - a.length);
   const dir = dirs.find((d) => d === '.' || inSrc === d || inSrc.startsWith(d + '/'));
-  if (!dir) return { status: 'uncovered', src };
+  if (!dir) return { status: 'uncovered', src, catalogPath };
   const sk = entry.skills[dir];
   const f = dir === '.' ? inSrc : inSrc.slice(dir.length + 1);
   // a file inside a nested skill folder that the lock doesn't know about belongs to no approved skill
-  if (f in sk.files) return { status: hashFile(real) === sk.files[f] ? 'ok' : 'changed', src, skill: sk, dir, entry };
-  if (sk.partial || !covered(f) || fs.statSync(real).isDirectory()) return { status: 'uncovered', src, skill: sk, dir, entry };
-  return { status: 'new', src, skill: sk, dir, entry };
+  if (Object.hasOwn(sk.files, f)) return { status: hashFile(real) === sk.files[f] ? 'ok' : 'changed', src, skill: sk, dir, entry, catalogPath };
+  if (sk.partial || !covered(f) || fs.statSync(real).isDirectory()) return { status: 'uncovered', src, skill: sk, dir, entry, catalogPath };
+  return { status: 'new', src, skill: sk, dir, entry, catalogPath };
 }
 
 export const permCard = (sk, entry) => `[Approved permissions for ${sk.kind === 'agent' ? 'agent' : 'skill'} "${sk.name}" (inferred from its files, approved ${String(entry?.approvedAt || '').slice(0, 10) || 'n/a'}): ${describe(sk.perms)}${sk.kind === 'agent' ? ` · tools: ${sk.tools || 'all'}` : ''}. If a step needs anything beyond this, stop and ask the user.]`;

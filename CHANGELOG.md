@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+- Fix: `vault doctor`, `vault overlaps` and routing crashed with "(SYN[t] || []) is not iterable" when a skill used a word such as "constructor" or "toString". Word tables now use null-prototype maps, and `vault.lock` lookups use own-property checks.
+- Fix (macOS CI): sources behind a symlinked path (macOS `/var` → `/private/var`, Windows junctions) are now matched by resolved path. This restores usage counts and permission banners for local folders.
+
 ## 1.3.0 — Skill manager
 
 - **Phase playbooks.** `vault plan "<task>"` (MCP `vault_plan`) gives a phase-by-phase playbook (discover, plan, build, verify, review, ship) with the skills and the agent for each phase.

@@ -9,6 +9,7 @@ import { inferSkill, inferAgent, tag } from './permissions.mjs';
 import { classifyPhases, PHASES, phaseById } from './phases.mjs';
 import { applyPrefer } from './overlaps.mjs';
 
+const own = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined);
 const tok = (s) => Math.round(Buffer.byteLength(s) / 4);
 
 export function sourceRoot(src) {
@@ -43,7 +44,7 @@ export function buildCatalog(cfg = loadConfig()) {
       const key = sk.name.toLowerCase().trim().replace(/\s+/g, '-');
       if (dropInternal && sk.internal && !(only && only.has(key))) { internalSkipped[src.name] = (internalSkipped[src.name] || 0) + 1; continue; }
       if ((only && !only.has(key)) || hide.has(key)) continue;
-      const ov = cfg.overrides[`${key}@${src.name}`] || cfg.overrides[key] || {};
+      const ov = own(cfg.overrides, `${key}@${src.name}`) || own(cfg.overrides, key) || {};
       if (ov.hidden) continue;
       let id = key; let dup = null;
       if (seenHash.has(sk.hash)) dup = seenHash.get(sk.hash);
@@ -64,7 +65,7 @@ export function buildCatalog(cfg = loadConfig()) {
       const key = ag.name.toLowerCase().trim().replace(/\s+/g, '-');
       if (dropInternal && ag.internal) continue;
       if ((only && !only.has(key)) || hide.has(key)) continue;
-      const ov = cfg.overrides[`${key}@${src.name}`] || cfg.overrides[key] || {};
+      const ov = own(cfg.overrides, `${key}@${src.name}`) || own(cfg.overrides, key) || {};
       if (ov.hidden) continue;
       let id = key; let dup = null;
       if (seenAgent.has(key)) { id = `${key}@${src.name}`; dup = seenAgent.get(key); } else seenAgent.set(key, id);

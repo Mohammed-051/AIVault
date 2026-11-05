@@ -26,6 +26,7 @@ before(async () => {
     'agents/code-reviewer.md': agent('code-reviewer', 'Reviews code for quality, security and maintainability after changes.', 'Read, Grep, Glob'),
     'agents/web-researcher.md': agent('web-researcher', 'Researches libraries and APIs on the web before implementation.', 'Read, WebFetch, WebSearch, Bash'),
     'agents/do-anything.md': agent('do-anything', 'General helper for implementing features.'),
+    'skills/constructor/SKILL.md': skill('constructor', 'Explains the constructor and toString of JavaScript classes (hasOwnProperty, valueOf, __proto__).'),
   }), { name: 'alpha' });
   await cmd.add(pkg('beta', {
     'skills/tdd-workflow/SKILL.md': skill('tdd-workflow', 'Test-driven development workflow: write a failing test first, watch it fail, then implement the smallest change.'),
@@ -71,6 +72,12 @@ test('overlaps finds look-alikes across packages; prefer picks the winner', () =
   assert.doesNotMatch(r, /- test-driven-development/);
   cmd.unprefer('tdd-workflow');
   assert.match(fs.readdirSync(path.join(VAULT, 'index')).map((f) => read(`index/${f}`)).join('\n'), /\*\*test-driven-development\*\*/);
+});
+
+test('words like "constructor" or "toString" are plain words, not object internals', async () => {
+  assert.match(cmd.routeTask('constructor toString valueOf').join('\n'), /constructor/);
+  assert.ok(Array.isArray(cmd.overlaps()));
+  assert.match((await cmd.doctor()).join('\n'), /All good|problem/);
 });
 
 test('usage counts what agents actually open', () => {
