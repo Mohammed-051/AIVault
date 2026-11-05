@@ -19,6 +19,7 @@ AIVAULT_HOME=/tmp/v node engine/cli.mjs init     # play in a throwaway vault
   2. a **benign look-alike** that it does not flag (docs quoting the pattern, a vendor installer, a test).
 
   Add both to `tests/security.test.mjs`. Rules that block popular legitimate repos will be declined; run your rule against a few big repos (`vault scan <url>`).
+- **Permission rules** (`engine/lib/permissions.mjs`). Same deal: a sample that should get the permission and a look-alike that shouldn't, in `tests/permissions.test.mjs`. Calibrate on a few big repos so tags stay rare and meaningful.
 - **False-positive reports.** Use the issue template and paste the output of `vault scan <repo>`.
 
 ## Style

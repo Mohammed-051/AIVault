@@ -1,6 +1,6 @@
 # Architecture
 
-AIVault is about 2,000 lines of dependency-free JavaScript, and needs Node 18+ and git. Everything lives in one folder:
+AIVault is about 2,600 lines of dependency-free JavaScript, and needs Node 18+ and git. Everything lives in one folder:
 
 ```text
 AIVault/
@@ -14,8 +14,9 @@ AIVault/
 ├─ local/skills/         your own skills (highest priority)
 ├─ memory/<project>.md   per-project context, decisions, log
 ├─ packs/*.json          shareable source lists
-├─ vault.json            your config (sources, profiles, pins, overrides, security)
-├─ .vault/               catalog cache, quarantine (tmp/), security reports
+├─ vault.json            your config (sources, profiles, pins, overrides, security, lock policy)
+├─ vault.lock            Skill Lock: approved commit, file hashes and permissions of every skill
+├─ .vault/               catalog cache, quarantine (tmp/), staged updates (staging/, pending.json), security reports
 └─ engine/
    ├─ cli.mjs            `vault` command
    ├─ mcp.mjs            MCP server (stdio JSON-RPC, no SDK)
@@ -23,6 +24,8 @@ AIVault/
    ├─ lib/scan.mjs       repo inspection: SKILL.md discovery, kind detection, frontmatter
    ├─ lib/domains.mjs    19-domain taxonomy + keywords (edit to taste)
    ├─ lib/security.mjs   malware / backdoor / injection scanner
+   ├─ lib/permissions.mjs permission inference (network, secrets, publish, …) per skill
+   ├─ lib/lock.mjs       vault.lock: pin, compare, line diffs, integrity checks
    ├─ lib/build.mjs      catalog → dashboard + indexes (dedupe, families, budgets)
    ├─ lib/search.mjs     BM25 search + task router
    ├─ lib/commands.mjs   every operation (shared by CLI and MCP)
@@ -39,7 +42,19 @@ AIVault/
    - It picks a **kind**. An MCP server with fewer than 10 public skills counts as a connector; its `.claude/` and `.agents/` skills are usually for the repo's own maintainers and are skipped unless you use `--only`.
 4. **Security.** `scanSource` returns clean, caution, review or blocked; see [security.md](security.md). Blocked sources are deleted from quarantine.
 5. **File.** The source moves to `library/<kind>/<name>` and is recorded in `vault.json` with its commit and security summary.
-6. **Index.** `reindex` rebuilds the catalog and renders the dashboard and indexes.
+6. **Lock.** Every skill folder is hashed and its permissions are inferred. The result is pinned in `vault.lock` with the full commit.
+7. **Index.** `reindex` rebuilds the catalog and renders the dashboard and indexes. Index lines carry permission tags such as `{net,secrets}`.
+
+## Updating a source
+
+`vault update` never changes `library/` directly:
+
+1. `git ls-remote` checks for a new commit without downloading anything.
+2. A new version is cloned into `.vault/staging/<name>` and security-scanned. A blocked version is discarded.
+3. The staged version is compared with `vault.lock`, skill by skill: new permissions, changed files and the scan verdict.
+4. A harmless update is swapped into `library/` and re-locked. An update that gains permissions, or scans worse, is recorded in `.vault/pending.json` and waits for `vault approve` or `vault reject`.
+
+See [skill-lock.md](skill-lock.md).
 
 ## Keeping the index small
 
@@ -61,8 +76,8 @@ AIVault/
 
 `engine/mcp.mjs` implements the stdio transport directly: `initialize`, `tools/list`, `tools/call` and `ping`. One server covers everything, so there's no separate filesystem server to configure.
 
-- **`vault_read`** resolves real paths and refuses anything outside the vault or inside `.git`. It prepends a provenance or warning banner to third-party files.
-- **`vault_add`** exposes no override for blocked repos.
+- **`vault_read`** resolves real paths and refuses anything outside the vault or inside `.git`. It checks each file from a locked source against its hash and refuses changed or unknown files. It prepends a provenance or warning banner and, for `SKILL.md`, the approved permissions.
+- **`vault_add`** exposes no override for blocked repos, and there is no tool to approve a held update.
 
 ## Cross-platform notes
 

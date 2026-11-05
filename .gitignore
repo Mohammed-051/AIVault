@@ -6,6 +6,7 @@ dashboard.md
 dashboard.legacy.md
 dashboard.md.bak-*
 vault.json
+vault.lock
 memory/*
 !memory/README.md
 

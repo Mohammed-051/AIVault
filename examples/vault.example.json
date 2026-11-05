@@ -25,5 +25,6 @@
     "morluto/rea": { "only": ["reverse-engineer-anything"], "includeInternal": true }
   },
   "budget": { "maxSkillsPerTask": 3, "descChars": 150 },
-  "security": { "block": "critical", "external": "auto" }
+  "security": { "block": "critical", "external": "auto" },
+  "lock": { "hold": "permissions" }
 }

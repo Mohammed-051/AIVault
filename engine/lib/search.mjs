@@ -1,6 +1,7 @@
 // Keyword search (BM25) over the catalog. Used by `vault search` and the vault_route MCP tool.
 import { P, readJSON } from './core.mjs';
 import { domainById } from './domains.mjs';
+import { tag } from './permissions.mjs';
 
 const STOP = new Set('a an and are as at be by for from how i in is it its my me of on or so that the this to we with you your want need help please can could should would do does using use make build create work working after before about into some any just get got new few minutes minute set up'.split(' '));
 const SYN = {
@@ -77,7 +78,8 @@ export function route(task, cfg, { limit = 5 } = {}) {
   const rest = hits.filter((h) => !shown.has(h.id)).slice(0, limit);
   if (rest.length) {
     lines.push('Candidate skills (pick at most 2, open the path):');
-    for (const h of rest) lines.push(`- ${h.id} [${h.domains.join(', ')}] — ${h.desc}\n  ${h.path}`);
+    for (const h of rest) { const t = tag(h.perms); lines.push(`- ${h.id} [${h.domains.join(', ')}]${t ? ` ${t}` : ''} — ${h.desc}\n  ${h.path}`); }
+    if (rest.some((h) => tag(h.perms))) lines.push('{…} = approved permissions (network, secrets, publishing…). The full list is at the top of each SKILL.md you open.');
   } else lines.push('No matching skills. Work without one, or browse index/ files listed in dashboard.md.');
   return lines.join('\n');
 }

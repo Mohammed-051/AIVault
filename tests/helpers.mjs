@@ -8,7 +8,7 @@ export const FIX = path.join(REPO, 'tests', 'fixtures');
 
 // A throwaway vault; must be created before importing engine modules (ROOT is read at import time).
 export function tempVault() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aivault-test-'));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'aivault-test-')));
   process.env.AIVAULT_HOME = dir;
   return dir;
 }

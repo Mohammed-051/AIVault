@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0 — Skill Lock
+
+- **Lockfile.** `vault.lock` pins every source to the commit you approved, every skill file to a SHA-256 hash, and every skill to its permissions. Existing vaults are pinned on first run. `vault sync` checks out the locked commits on a new machine.
+- **Permission labels.** Permissions are inferred from each skill's instructions and bundled scripts across 11 kinds: commands, bundled scripts, package installs, network hosts, secrets, deletes, publishing, writes outside the project, agent-config changes, admin rights and scheduling.
+  - Shown as `{net,secrets}` tags in indexes and in `vault_route`.
+  - Shown as a card at the top of every `SKILL.md` that `vault_read` serves.
+  - Listed by `vault add --dry-run`, `vault add` and `vault permissions`.
+- **Update review.** `vault update` stages and scans each new version and diffs it against the lock.
+  - Updates with no new permissions apply on their own.
+  - Updates that add permissions or worsen the scan verdict are held, and the agent keeps the approved version.
+  - New commands: `vault review` (permission and line diffs), `vault approve`, `vault reject` (skips that commit) and `vault verify`.
+  - `lock.hold` sets the policy: `permissions`, `code` or `any`.
+- **Tamper refusal.** `vault_read` refuses files that changed or appeared since approval. `vault doctor` reports drift.
+- **MCP.** New read-only `vault_review` and `vault_permissions` tools. There is deliberately no approve tool.
+- **Scanner.** `EXFIL-ENV-DUMP` now also catches `$(env | …)`. Blocked updates show their top findings inline.
+- **Other.** A single version number (`package.json`), Windows short-path-safe reads, `file://` sources, an animated README demo, and 39 tests.
+
 ## 1.1.0
 
 - **Security gate.** Every `vault add` is cloned to quarantine and scanned (36 context-aware rules for malware, backdoors, exfiltration, prompt injection, obfuscation and leaked keys).

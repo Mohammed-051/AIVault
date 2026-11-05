@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // AIVault CLI. Usage: vault <command> [args] [--flags]   ·   vault <repo-url>  (shortcut for add)
 import * as cmd from './lib/commands.mjs';
+import { VERSION } from './lib/core.mjs';
 
-const HELP = `AIVault — one library and router for every AI skill, connector and tool you use.
+const HELP = `AIVault ${VERSION} — a local library for agent skills, with a lockfile and permissions for what they can do.
 
   vault setup [--yes]              First run: folders, starter pack, connect your AI apps, PATH
   vault <repo-url>                 Add a repo (same as: vault add <repo-url>)
@@ -17,7 +18,17 @@ const HELP = `AIVault — one library and router for every AI skill, connector a
         --allow-risky              Add even if the security scan blocks it (only after reading the report)
   vault scan [name|all|url]        Security-scan sources (or preview a repo without adding it)
   vault remove <name>              Delete a source and re-index
-  vault update [name]              Pull latest for all (or one) and re-index
+
+Skill Lock
+  vault update [name]              Download updates into staging, scan and diff them. Harmless ones apply;
+                                   ones that add permissions or worsen the scan are held for review
+  vault review [name]              Show held updates: new permissions, changed instructions, scan results
+  vault approve <name> [--yes]     Apply a held update (or accept on-disk changes) and lock it
+  vault reject <name>              Discard a held update and skip that version
+  vault verify                     Check every skill file against vault.lock
+  vault permissions [skill|source] What skills are allowed to do (network, secrets, publishing, …)
+
+Library
   vault sync                       Clone anything in vault.json that's missing (new machine)
   vault index                      Rebuild dashboard.md and index/*.md
   vault search <words>             Find skills
@@ -57,13 +68,15 @@ if (command && /^(https?:\/\/|git@)|^[\w.-]+\/[\w.-]+$/.test(command) && !['add'
 const table = {
   add: () => cmd.add(rest[0], flags),
   remove: () => cmd.remove(rest[0]), rm: () => cmd.remove(rest[0]),
-  update: () => cmd.update(rest[0]), sync: () => cmd.sync(), index: () => cmd.index(),
+  update: () => cmd.update(rest[0]), review: () => cmd.review(rest[0]), diff: () => cmd.review(rest[0]),
+  approve: () => cmd.approve(rest[0], flags), reject: () => cmd.reject(rest[0]), verify: () => cmd.verify(),
+  permissions: () => cmd.permissions(rest.join(' ') || undefined), perms: () => cmd.permissions(rest.join(' ') || undefined), sync: () => cmd.sync(), index: () => cmd.index(),
   search: () => cmd.find(rest.join(' ')), route: () => cmd.routeTask(rest.join(' ')),
   list: () => cmd.list(rest[0]), ls: () => cmd.list(rest[0]), doctor: () => cmd.doctor(),
   'new-project': () => cmd.newProject(rest.join(' '), flags), 'new-skill': () => cmd.newSkill(rest[0]),
   link: () => cmd.link(rest[0], flags), pack: () => cmd.pack(rest[0]), export: () => cmd.exportPack(rest[0]),
   migrate: () => cmd.migrate(), init: () => cmd.init(), 'mcp-config': () => cmd.mcpConfig(), connect: () => cmd.connect(flags),
-  scan: () => cmd.scan(rest[0]), setup: () => cmd.setup(flags), version: () => ['aivault 1.1.0'],
+  scan: () => cmd.scan(rest[0]), setup: () => cmd.setup(flags), version: () => [`aivault ${VERSION}`],
 };
 
 if (!command || command === 'help' || flags.help || !table[command]) {

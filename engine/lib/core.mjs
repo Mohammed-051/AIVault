@@ -23,6 +23,8 @@ export const P = {
   engine: ENGINE,
 };
 
+export const VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(ENGINE, '..', 'package.json'), 'utf8')).version; } catch { return '0.0.0'; } })();
+
 export const KINDS = ['skills', 'mcp', 'plugins', 'tools', 'catalogs'];
 
 // Owners whose repos win name collisions (official sources first).
@@ -87,12 +89,15 @@ export const DEFAULT_CONFIG = {
   budget: { maxSkillsPerTask: 3, descChars: 150 },
   // block: 'critical' (default) or 'high'. external: 'auto' | 'skillspector' | 'cisco' | 'off'
   security: { block: 'critical', external: 'auto' },
+  // Skill Lock. hold: 'permissions' (default) holds updates that add permissions or worsen the scan verdict;
+  // 'code' also holds updates that change bundled scripts; 'any' holds every change for review.
+  lock: { hold: 'permissions' },
 };
 
 export function loadConfig() {
   const cfg = readJSON(P.config, null);
   if (!cfg) return structuredClone(DEFAULT_CONFIG);
-  return { ...structuredClone(DEFAULT_CONFIG), ...cfg, budget: { ...DEFAULT_CONFIG.budget, ...(cfg.budget || {}) }, security: { ...DEFAULT_CONFIG.security, ...(cfg.security || {}) } };
+  return { ...structuredClone(DEFAULT_CONFIG), ...cfg, budget: { ...DEFAULT_CONFIG.budget, ...(cfg.budget || {}) }, security: { ...DEFAULT_CONFIG.security, ...(cfg.security || {}) }, lock: { ...DEFAULT_CONFIG.lock, ...(cfg.lock || {}) } };
 }
 export function saveConfig(cfg) { writeJSON(P.config, cfg); }
 
@@ -120,6 +125,11 @@ export const git = (args, cwd, timeoutMs = 600000) => run('git', [...GITC, ...ar
 
 export async function gitAvailable() { return (await run('git', ['--version'])).code === 0; }
 export async function gitHead(dir) { const r = await git(['rev-parse', '--short', 'HEAD'], dir); return r.code === 0 ? r.stdout : null; }
+export async function gitHeadFull(dir) { const r = await git(['rev-parse', 'HEAD'], dir); return r.code === 0 ? r.stdout : null; }
+export async function remoteHead(url, ref) {
+  const r = await git(['ls-remote', url, ref || 'HEAD'], undefined, 60000);
+  return r.code === 0 && r.stdout ? r.stdout.split(/\s+/)[0] : null;
+}
 export async function gitRemote(dir) { const r = await git(['remote', 'get-url', 'origin'], dir); return r.code === 0 ? r.stdout : null; }
 
 // ---------- source parsing ----------
@@ -147,7 +157,7 @@ export function parseSource(input) {
     }
     return src;
   }
-  if (/^(https?:\/\/|git@|ssh:\/\/)/.test(s)) {
+  if (/^(https?:\/\/|git@|ssh:\/\/|file:\/\/)/.test(s)) {
     const last = s.replace(/\.git$/, '').split(/[/:]/).filter(Boolean);
     const repo = last.pop(); const owner = last.pop() || '';
     return { type: 'git', url: s, owner, repo, name: nameFor(owner, repo) };

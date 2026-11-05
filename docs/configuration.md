@@ -32,7 +32,10 @@
   },
 
   "budget":   { "maxSkillsPerTask": 3, "descChars": 150 },
-  "security": { "block": "critical", "external": "auto" }
+  "security": { "block": "critical", "external": "auto" },
+
+  // Skill Lock: when an update waits for your review. "permissions" (default) | "code" | "any"
+  "lock": { "hold": "permissions" }
 }
 ```
 
@@ -46,6 +49,16 @@
 | `priority` | Lower number wins name collisions (`local` = 0, official owners = 1, others = 2) |
 | `includeInternal` | Keep skills from hidden folders (`.claude/`, `.agents/`) in MCP/tool repos |
 | `ref`, `subdir` | Branch/tag and sparse folder (set automatically from `tree/` links) |
+
+## Skill Lock
+
+| `lock.hold` | Holds an update when |
+|---|---|
+| `"permissions"` | it adds a network host, secret, publish/delete, global write, agent-config, admin or scheduling permission to any skill, or the scan verdict gets worse |
+| `"code"` | the above, or a bundled script changed |
+| `"any"` | anything in a skill folder changed |
+
+`vault.lock` is written by AIVault. Don't edit it by hand; use `vault approve` and `vault reject`. Keep it next to `vault.json` when you move to a new machine, and `vault sync` will reproduce the exact approved versions. See [skill-lock.md](skill-lock.md).
 
 ## Domains
 

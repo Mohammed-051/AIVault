@@ -45,6 +45,7 @@ test('MCP server answers initialize and lists tools', async () => {
   child.kill();
   const list = lines.map((l) => JSON.parse(l)).find((m) => m.id === 2);
   const names = list.result.tools.map((t) => t.name);
-  for (const n of ['vault_route', 'vault_read', 'vault_memory', 'vault_add', 'vault_scan']) assert.ok(names.includes(n));
+  for (const n of ['vault_route', 'vault_read', 'vault_memory', 'vault_add', 'vault_scan', 'vault_review', 'vault_permissions']) assert.ok(names.includes(n));
+  assert.ok(!names.some((n) => /approve|reject/.test(n)), 'approving updates must stay human-only');
   assert.ok(!JSON.stringify(list.result.tools.find((t) => t.name === 'vault_add').inputSchema).includes('allowRisky'));
 });

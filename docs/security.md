@@ -16,7 +16,7 @@ vault add <link>
    └─ clean / caution → added
 ```
 
-`vault update` re-scans every source whose content changed. If an update turns a clean repo malicious, it is **rolled back to the previous commit** automatically.
+`vault update` downloads new versions into staging and scans them before anything changes. A blocked update is discarded and the approved version stays. A clean update can still be held: [Skill Lock](skill-lock.md) compares it with the version you approved and holds it if it gains permissions, such as a new network host, a secret or `git push`. Static rules alone would let those through.
 
 AIVault itself **never executes code from a repo**: no installers, npm scripts, hooks or binaries. It reads files.
 
