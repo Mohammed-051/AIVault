@@ -5,7 +5,9 @@ import { ROOT, P, OFFICIAL_OWNERS, abs, rel, exists, writeJSON, writeText, loadC
 import { scanRepo, frontmatter } from './scan.mjs';
 import { DOMAINS, domainById } from './domains.mjs';
 import { ensureLocked } from './lock.mjs';
-import { inferSkill, tag } from './permissions.mjs';
+import { inferSkill, inferAgent, tag } from './permissions.mjs';
+import { classifyPhases, PHASES, phaseById } from './phases.mjs';
+import { applyPrefer } from './overlaps.mjs';
 
 const tok = (s) => Math.round(Buffer.byteLength(s) / 4);
 
@@ -23,7 +25,8 @@ function priority(src) {
 
 export function buildCatalog(cfg = loadConfig()) {
   const sources = [{ name: 'local', type: 'local', path: P.local, kind: 'skills' }, ...cfg.sources];
-  const repos = []; const skills = []; const internalSkipped = {}; const seenName = new Map(); const seenHash = new Map();
+  const repos = []; const skills = []; const agents = []; const internalSkipped = {}; const seenName = new Map(); const seenHash = new Map();
+  const seenAgent = new Map();
   const lock = ensureLocked(cfg, sourceRoot);
   const ordered = sources.map((s, i) => ({ s, i })).sort((a, b) => priority(a.s) - priority(b.s) || a.i - b.i).map((x) => x.s);
 
@@ -50,14 +53,31 @@ export function buildCatalog(cfg = loadConfig()) {
       const dir = path.posix.dirname(sk.relPath);
       const locked = lock.sources[src.name]?.skills?.[dir];
       const perms = locked ? locked.perms : (src.type === 'local' ? inferSkill(dir === '.' ? root : path.join(root, ...dir.split('/'))) : []);
-      const entry = { id, name: sk.name, source: src.name, desc: sk.desc, path: relPath, domains, bytes: sk.bytes, dupOf: dup, perms };
+      const entry = { id, name: sk.name, source: src.name, desc: sk.desc, path: relPath, domains, phases: classifyPhases(sk.name, sk.desc).phases, heads: sk.heads, bytes: sk.bytes, dupOf: dup, perms };
       if (['review', 'blocked'].includes(src.security?.verdict)) entry.risk = src.security.verdict;
       if (!seenName.has(key)) seenName.set(key, id);
       if (!dup) seenHash.set(sk.hash, id);
       skills.push(entry); count++;
     }
+    let agentCount = 0;
+    for (const ag of scan.agents || []) {
+      const key = ag.name.toLowerCase().trim().replace(/\s+/g, '-');
+      if (dropInternal && ag.internal) continue;
+      if ((only && !only.has(key)) || hide.has(key)) continue;
+      const ov = cfg.overrides[`${key}@${src.name}`] || cfg.overrides[key] || {};
+      if (ov.hidden) continue;
+      let id = key; let dup = null;
+      if (seenAgent.has(key)) { id = `${key}@${src.name}`; dup = seenAgent.get(key); } else seenAgent.set(key, id);
+      const full = path.join(root, ...ag.relPath.split('/'));
+      const locked = lock.sources[src.name]?.skills?.[`agent:${ag.relPath}`];
+      const perms = locked ? locked.perms : (src.type === 'local' ? inferAgent(full, ag.tools) : []);
+      const domains = ov.domain ? [ov.domain] : (ag.domains.length ? ag.domains : [src.domain || scan.repoClass.domain || 'dev-core']);
+      agents.push({ id, kind: 'agent', name: ag.name, source: src.name, desc: ag.desc, path: rel(full), domains, phases: classifyPhases(ag.name, ag.desc).phases, heads: ag.heads,
+        tools: ag.tools, model: ag.model, perms, dupOf: dup, ...(['review', 'blocked'].includes(src.security?.verdict) ? { risk: src.security.verdict } : {}) });
+      agentCount++;
+    }
     if (src.name !== 'local') {
-      repos.push({
+      repos.push({ agents: agentCount,
         name: src.name, kind: src.kind || scan.kind, url: src.url || src.path, path: rel(root), skills: count,
         summary: scan.summary, readme: scan.readme ? rel(path.join(root, scan.readme)) : null,
         mcpServers: scan.mcpServers.slice(0, 40).map((m) => ({ ...m, dir: m.dir ? rel(path.join(root, ...m.dir.split('/'))) : rel(root) })),
@@ -66,8 +86,9 @@ export function buildCatalog(cfg = loadConfig()) {
     }
   }
   const families = detectFamilies(skills);
+  applyPrefer({ skills, agents }, cfg);
   const projects = listProjects();
-  const catalog = { generated: new Date().toISOString(), root: ROOT.split(path.sep).join('/'), skills, repos, projects, internalSkipped, families };
+  const catalog = { generated: new Date().toISOString(), root: ROOT.split(path.sep).join('/'), skills, agents, repos, projects, internalSkipped, families };
   writeJSON(P.catalog, catalog);
   return catalog;
 }
@@ -169,7 +190,7 @@ export function render(catalog, cfg = loadConfig()) {
   rmTree(P.index); fs.mkdirSync(P.index, { recursive: true });
   const visible = catalog.skills.filter((s) => !s.dupOf);
   const byDomain = Object.fromEntries(DOMAINS.map((d) => [d.id, []]));
-  for (const s of visible) if (!s.family) for (const d of s.domains) (byDomain[d] ||= []).push(s);
+  for (const s of visible) if (!s.family && !s.deferTo) for (const d of s.domains) (byDomain[d] ||= []).push(s);
   const famBy = {};
   for (const f of catalog.families || []) (famBy[f.domains[0]] ||= []).push(f);
   const indexStats = [];
@@ -201,6 +222,22 @@ export function render(catalog, cfg = loadConfig()) {
     'These sources also ship a Claude Code plugin manifest. Optional: install to get slash commands/hooks; skills are already readable from the vault without installing.',
     pluginish, (r) => `- **${r.name}** — \`/plugin marketplace add ${r.owner}/${r.repo}\``));
 
+  // agents, grouped by the phase they help with most
+  const agentsVis = (catalog.agents || []).filter((a) => !a.dupOf && !a.deferTo);
+  if (agentsVis.length) {
+    const lines = [`# Agents (subagents) — ${agentsVis.length}`, '',
+      'Specialists to hand one phase of work to. `vault_plan` and `vault_route` with a phase pick them for you.',
+      'Claude Code: `vault link <agent>` installs one for the Task tool. Any other app: open the file with `vault_read` and follow it as a focused pass.'];
+    const by = {};
+    for (const a of agentsVis) (by[a.phases[0] || 'other'] ||= []).push(a);
+    for (const ph of [...PHASES.map((p) => p.id), 'other']) {
+      const list = by[ph]; if (!list) continue;
+      lines.push('', `## ${phaseById[ph]?.title || 'Other'} — ${list.length}`);
+      for (const a of list) { const t = tag(a.perms); lines.push(`- **${a.id}**${a.risk ? ' ⚠' : ''}${t ? ` ${t}` : ''} (${a.source}) — ${a.desc.length > 90 ? a.desc.slice(0, 87).replace(/\s+\S*$/, '') + '…' : a.desc} · \`${a.path}\``); }
+    }
+    writeText(path.join(P.index, 'agents.md'), lines.join('\n') + '\n');
+  }
+
   // dashboard
   const total = visible.length;
   const profiles = Object.entries(cfg.profiles || {});
@@ -213,12 +250,13 @@ export function render(catalog, cfg = loadConfig()) {
     `<!-- Generated by \`vault index\` on ${today()}. Do not edit by hand: change vault.json, then run \`vault index\`. -->`,
     '',
     `**Root:** \`${ROOT.split(path.sep).join('/')}\` — every path below is relative to it.  `,
-    `**Library:** ${total} skills · ${mcp.length} connector sources · ${tools.length + plugins.length} tools · ${cats.length} catalogs · ${catalog.projects.length} projects`,
+    `**Library:** ${total} skills · ${agentsVis.length} agents · ${mcp.length} connector sources · ${tools.length + plugins.length} tools · ${cats.length} catalogs · ${catalog.projects.length} projects`,
     '',
     '**Tools:** with the `aivault` MCP server connected, use `vault_route` (what to load), `vault_read` (open a file by the paths below) and `vault_memory` (read/append project memory). Without it, use your normal file tools.',
     '',
     '## Protocol — do this for every task',
     '1. **Route.** Call `vault_route` with the task. It returns project memory, base skills, pinned routes and the best skills. No tool? Use steps 2–4.',
+    '   **Multi-step work (build a feature, write and publish a post…): act as the manager.** Call `vault_plan` once. At the start of each phase it lists (discover → plan → build → verify → review → ship), call `vault_route` with that `phase` and load only what it returns. Hand a phase to the suggested agent when your app supports subagents; otherwise read the agent file and do that phase yourself, following it.',
     '2. **Project?** If the task belongs to a project in the Projects table, read its memory file first.',
     '3. **Base skills + pins.** Load the base skills for the task type, then any pinned route that matches.',
     `4. **Find skills.** Pick 1–2 domains from the Domain map, open only those index files, choose at most ${cfg.budget.maxSkillsPerTask} skills.`,
@@ -245,6 +283,7 @@ export function render(catalog, cfg = loadConfig()) {
     ...indexStats.map(({ d, n, tokens }) => `| ${d.title} | ${d.covers} | \`index/${d.id}.md\` | ${n} | ${tokens} |`),
     '',
     '## Beyond skills',
+    ...(agentsVis.length ? [`- \`index/agents.md\` — subagents (${agentsVis.length}) grouped by phase, to delegate work to`] : []),
     `- \`index/connectors.md\` — MCP server sources (${mcp.length}) with run commands`,
     `- \`index/tools.md\` — CLIs and workflow systems (${tools.length + plugins.length})`,
     `- \`index/catalogs.md\` — awesome-lists for discovering more (${cats.length})`,

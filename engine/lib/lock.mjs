@@ -1,5 +1,7 @@
 // Skill Lock: pins every skill to the exact content and permissions the user approved.
 //   vault.lock          { version, sources: { <name>: { commit, approvedAt, how, verdict, skills: { <dir>: { name, perms, files, partial } } } } }
+//                       Subagent files are pinned in the same map under "agent:<path>" keys, so updates, diffs and
+//                       tamper checks treat skills and agents alike.
 //   .vault/pending.json updates that were downloaded but held for review
 //   .vault/staging/     the held versions themselves (the library is untouched until approval)
 import fs from 'node:fs';
@@ -8,7 +10,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { ROOT, P, abs, rel, exists, readJSON, writeJSON } from './core.mjs';
 import { scanRepo } from './scan.mjs';
-import { skillFiles, inferSkill, covered, added, describe, levelOf } from './permissions.mjs';
+import { skillFiles, inferSkill, inferAgent, covered, added, describe, levelOf } from './permissions.mjs';
 
 export const LOCK = path.join(ROOT, 'vault.lock');
 export const PENDING = path.join(P.state, 'pending.json');
@@ -26,10 +28,25 @@ export function hashFile(full) {
   return crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
 }
 
-// Content + permissions of every skill in a source folder.
+export const isAgentKey = (k) => k.startsWith('agent:');
+// Path of a pinned file relative to the source root.
+export const filePath = (key, f) => (isAgentKey(key) ? path.posix.join(path.posix.dirname(key.slice(6)), f) : key === '.' ? f : `${key}/${f}`);
+
+function agentEntries(root, scan) {
+  const out = {};
+  for (const a of scan.agents || []) {
+    const full = path.join(root, ...a.relPath.split('/'));
+    try { out[`agent:${a.relPath}`] = { name: a.name, kind: 'agent', tools: a.tools || 'all', perms: inferAgent(full, a.tools), files: { [path.posix.basename(a.relPath)]: hashFile(full) } }; } catch {}
+  }
+  return out;
+}
+
+// Content + permissions of every skill and subagent in a source folder.
 export function snapshot(root, { repoName } = {}) {
   const skills = {};
-  for (const sk of scanRepo(root, { repoName }).skills) {
+  const scan = scanRepo(root, { repoName });
+  Object.assign(skills, agentEntries(root, scan));
+  for (const sk of scan.skills) {
     const dir = path.posix.dirname(sk.relPath);
     const full = dir === '.' ? root : path.join(root, ...dir.split('/'));
     const listing = skillFiles(full);
@@ -41,7 +58,7 @@ export function snapshot(root, { repoName } = {}) {
 }
 
 export function pin(lock, name, snap, { commit = null, verdict = null, how = 'approved' } = {}) {
-  lock.sources[name] = { commit, approvedAt: new Date().toISOString(), how, verdict, skills: snap.skills };
+  lock.sources[name] = { commit, approvedAt: new Date().toISOString(), how, verdict, agentsV: 1, skills: snap.skills };
   return lock.sources[name];
 }
 
@@ -53,9 +70,15 @@ export function headSync(dir) {
 export function ensureLocked(cfg, sourceRoot) {
   const lock = loadLock(); let changed = 0;
   for (const s of cfg.sources) {
-    if (s.type === 'local' || lock.sources[s.name]) continue;
+    if (s.type === 'local') continue;
     const root = sourceRoot(s);
     if (!exists(root)) continue;
+    const have = lock.sources[s.name];
+    if (have) {
+      // Locks written before agents were tracked: pin the agents as they are now (trust on first use).
+      if (!have.agentsV) { Object.assign(have.skills, agentEntries(root, scanRepo(root, { repoName: s.repo || s.name }))); have.agentsV = 1; changed++; }
+      continue;
+    }
     pin(lock, s.name, snapshot(root, { repoName: s.repo || s.name }), { commit: headSync(abs(s.path)), verdict: s.security?.verdict || null, how: 'first-use' });
     changed++;
   }
@@ -70,9 +93,10 @@ export function compare(prev = { skills: {} }, next = { skills: {} }) {
   const isScript = (f) => /\.(sh|bash|zsh|ps1|psm1|bat|cmd|py|js|mjs|cjs|ts|rb|pl|php|go|rs|lua|vbs)$/i.test(f);
   for (const [dir, n] of Object.entries(next.skills)) {
     const o = prev.skills[dir];
+    const label = n.kind === 'agent' ? `${n.name} (agent)` : n.name;
     if (!o) {
-      out.addedSkills.push({ dir, name: n.name, perms: n.perms });
-      for (const t of added([], n.perms)) out.newPerms.push({ skill: n.name, dir, perm: t, isNewSkill: true });
+      out.addedSkills.push({ dir, name: label, perms: n.perms });
+      for (const t of added([], n.perms)) out.newPerms.push({ skill: label, dir, perm: t, isNewSkill: true });
       continue;
     }
     const files = { added: [], removed: [], modified: [] };
@@ -81,12 +105,12 @@ export function compare(prev = { skills: {} }, next = { skills: {} }) {
     const gained = added(o.perms, n.perms, 1);
     const lost = (o.perms || []).filter((t) => !n.perms.includes(t));
     if (!files.added.length && !files.removed.length && !files.modified.length && !gained.length && !lost.length) continue;
-    out.changed.push({ dir, name: n.name, files, gained, lost });
-    for (const t of gained.filter((x) => levelOf(x) >= 2)) out.newPerms.push({ skill: n.name, dir, perm: t });
-    for (const f of [...files.added, ...files.modified]) if (isScript(f)) out.changedScripts.push(`${dir === '.' ? '' : dir + '/'}${f}`);
+    out.changed.push({ dir, name: label, files, gained, lost });
+    for (const t of gained.filter((x) => levelOf(x) >= 2)) out.newPerms.push({ skill: label, dir, perm: t });
+    for (const f of [...files.added, ...files.modified]) if (isScript(f)) out.changedScripts.push(filePath(dir, f));
     out.textChanges += files.modified.length + files.added.length + files.removed.length;
   }
-  for (const [dir, o] of Object.entries(prev.skills)) if (!next.skills[dir]) out.removedSkills.push({ dir, name: o.name });
+  for (const [dir, o] of Object.entries(prev.skills)) if (!next.skills[dir]) out.removedSkills.push({ dir, name: o.kind === 'agent' ? `${o.name} (agent)` : o.name });
   out.any = !!(out.addedSkills.length || out.removedSkills.length || out.changed.length);
   return out;
 }
@@ -114,14 +138,15 @@ export function lineDiff(a, b, { max = 10 } = {}) {
 export function verifySource(entry, root) {
   const res = { changed: [], missing: [], extra: [] };
   for (const [dir, sk] of Object.entries(entry.skills || {})) {
-    const base = dir === '.' ? root : path.join(root, ...dir.split('/'));
-    const pre = dir === '.' ? '' : `${dir}/`;
+    const base = isAgentKey(dir) ? root : dir === '.' ? root : path.join(root, ...dir.split('/'));
     for (const [f, h] of Object.entries(sk.files)) {
-      const full = path.join(base, ...f.split('/'));
-      if (!exists(full)) res.missing.push(pre + f);
-      else { try { if (hashFile(full) !== h) res.changed.push(pre + f); } catch { res.missing.push(pre + f); } }
+      const relf = filePath(dir, f);
+      const full = path.join(root, ...relf.split('/'));
+      if (!exists(full)) res.missing.push(relf);
+      else { try { if (hashFile(full) !== h) res.changed.push(relf); } catch { res.missing.push(relf); } }
     }
-    if (!sk.partial && exists(base)) for (const f of skillFiles(base).files) if (!(f.rel in sk.files)) res.extra.push(pre + f.rel);
+    const pre = dir === '.' ? '' : `${dir}/`;
+    if (!isAgentKey(dir) && !sk.partial && exists(base)) for (const f of skillFiles(base).files) if (!(f.rel in sk.files)) res.extra.push(pre + f.rel);
   }
   res.ok = !res.changed.length && !res.missing.length && !res.extra.length;
   return res;
@@ -136,7 +161,9 @@ export function checkFile(real, relp, cfg, sourceRoot, lock = loadLock()) {
   let base = sourceRoot(src); try { base = fs.realpathSync(base); } catch {}
   const inSrc = path.relative(base, real).split(path.sep).join('/');
   if (inSrc.startsWith('..')) return { status: 'uncovered', src };
-  const dirs = Object.keys(entry.skills).sort((a, b) => b.length - a.length);
+  const ag = entry.skills[`agent:${inSrc}`];
+  if (ag) return { status: hashFile(real) === Object.values(ag.files)[0] ? 'ok' : 'changed', src, skill: ag, dir: `agent:${inSrc}`, entry };
+  const dirs = Object.keys(entry.skills).filter((d) => !isAgentKey(d)).sort((a, b) => b.length - a.length);
   const dir = dirs.find((d) => d === '.' || inSrc === d || inSrc.startsWith(d + '/'));
   if (!dir) return { status: 'uncovered', src };
   const sk = entry.skills[dir];
@@ -147,6 +174,6 @@ export function checkFile(real, relp, cfg, sourceRoot, lock = loadLock()) {
   return { status: 'new', src, skill: sk, dir, entry };
 }
 
-export const permCard = (sk, entry) => `[Approved permissions for skill "${sk.name}" (inferred from its files, approved ${String(entry?.approvedAt || '').slice(0, 10) || 'n/a'}): ${describe(sk.perms)}. If a step needs anything beyond this, stop and ask the user.]`;
+export const permCard = (sk, entry) => `[Approved permissions for ${sk.kind === 'agent' ? 'agent' : 'skill'} "${sk.name}" (inferred from its files, approved ${String(entry?.approvedAt || '').slice(0, 10) || 'n/a'}): ${describe(sk.perms)}${sk.kind === 'agent' ? ` · tools: ${sk.tools || 'all'}` : ''}. If a step needs anything beyond this, stop and ask the user.]`;
 export const relLock = () => rel(LOCK);
 export { abs };

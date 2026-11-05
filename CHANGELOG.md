@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.0 — Skill manager
+
+- **Phase playbooks.** `vault plan "<task>"` (MCP `vault_plan`) gives a phase-by-phase playbook (discover, plan, build, verify, review, ship) with the skills and the agent for each phase.
+  - Task-specific matches rank first. General process skills fill the rest.
+  - Skills built for a stack the task doesn't mention are left out.
+  - Each item appears in one phase only.
+  - `vault route --phase` and the `vault_route` `phase` argument return one phase's picks.
+- **Manager protocol.** The dashboard and agent instructions tell agents to plan multi-step work, pull each phase's skills as the phase starts, and delegate phases to specialist agents.
+- **Agents.** Subagent files are first-class:
+  - indexed in `index/agents.md` by phase;
+  - given permissions from their `tools:` line (`{all-tools}` when there isn't one);
+  - pinned in `vault.lock`, with updates held when an agent gains tools and tampered agent files refused;
+  - installable for Claude Code with `vault link <agent>` (`vault unlink` removes them), with linked copies following approved updates.
+- **Overlaps.** `vault overlaps` groups look-alike skills or agents from different packages, using names, descriptions and headings with complete-linkage grouping. `vault prefer` / `vault unprefer` pick a winner per job; the others leave the index and routes but stay searchable.
+- **Usage.** `vault usage` shows the most-opened skills and agents, and sources never used. `vault doctor` reports unresolved overlaps, and warns when `~/.claude/skills` holds more skills than Claude Code lists reliably.
+- **Fixes.**
+  - Skills in local folders outside the vault can now be opened with `vault_read`.
+  - Routing classifies the task's own words, so small vaults still find the right domain.
+  - New synonyms: tdd, e2e, pr, i18n, a11y.
+- 46 tests.
+
 ## 1.2.0 — Skill Lock
 
 - **Lockfile.** `vault.lock` pins every source to the commit you approved, every skill file to a SHA-256 hash, and every skill to its permissions. Existing vaults are pinned on first run. `vault sync` checks out the locked commits on a new machine.

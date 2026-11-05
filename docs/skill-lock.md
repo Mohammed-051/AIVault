@@ -51,6 +51,14 @@ Agents see the permissions in three places:
 
 Use `vault permissions` for a summary of the whole vault, or `vault permissions <skill|source>` for details.
 
+Subagent files (`agents/<name>.md`) are locked the same way, under `agent:<path>` keys. Their permissions also come from their `tools:` line:
+- `Bash` means *runs commands*.
+- `WebFetch` or `WebSearch` means *network: web search / fetch*.
+- `mcp__x` means *uses MCP server x*.
+- No `tools:` line means *inherits every tool*, a medium permission.
+
+An update that gives an agent web access is therefore held, like a skill that gains a network host.
+
 ## Updates
 
 ```text

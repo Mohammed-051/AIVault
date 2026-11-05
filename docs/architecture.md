@@ -6,6 +6,7 @@ AIVault is about 2,600 lines of dependency-free JavaScript, and needs Node 18+ a
 AIVault/
 ├─ dashboard.md          generated router (~1.5–2k tokens) — agents start here
 ├─ index/<domain>.md     generated one-line-per-skill lists, ~0.1–2.5k tokens each
+├─ index/agents.md       subagents grouped by phase
 ├─ index/connectors.md   MCP server sources + run commands
 ├─ index/tools.md        CLIs / workflow systems (need their own install)
 ├─ index/catalogs.md     awesome-lists
@@ -25,9 +26,11 @@ AIVault/
    ├─ lib/domains.mjs    19-domain taxonomy + keywords (edit to taste)
    ├─ lib/security.mjs   malware / backdoor / injection scanner
    ├─ lib/permissions.mjs permission inference (network, secrets, publish, …) per skill
-   ├─ lib/lock.mjs       vault.lock: pin, compare, line diffs, integrity checks
+   ├─ lib/lock.mjs       vault.lock: pin, compare, line diffs, integrity checks (skills and agents)
+   ├─ lib/phases.mjs     6 work phases + keywords (edit to taste)
+   ├─ lib/overlaps.mjs   look-alike skills/agents across sources, preferences
    ├─ lib/build.mjs      catalog → dashboard + indexes (dedupe, families, budgets)
-   ├─ lib/search.mjs     BM25 search + task router
+   ├─ lib/search.mjs     BM25 search, task router, phase planner
    ├─ lib/commands.mjs   every operation (shared by CLI and MCP)
    └─ lib/setup.mjs      app detection, config patching, setup wizard
 ```
@@ -71,6 +74,20 @@ See [skill-lock.md](skill-lock.md).
 2. **Base skills** for the task type. Profiles map domains to base skills: for example, code gets caveman and ponytail, writing gets none.
 3. **Pinned routes** whose keywords match the task (at most 2).
 4. **Up to 5 BM25 matches.** These use light stemming and synonyms, need two matching words or a rare name hit, and penalize skill families.
+
+## Planning and delegation
+
+- **Phase tags.** `classifyPhases` gives every skill and agent up to two of the phases discover, plan, build, verify, review and ship, from its name (weighted ×3) and description.
+- **`plan(task)`.** It works out the task's domains (from matching skills, pins and the task's own words). Then, for each phase, it ranks that phase's items by:
+  - how well they match the task;
+  - how well they match the phase;
+  - whether they share the task's domain.
+
+  An item whose name points at a technology the task doesn't mention is dropped. Each item appears in one phase only, the one where it ranks best.
+- **`route(task, { phase })`.** It returns the same picks for one phase, with up to three skills and two agents.
+- **Preferences.** `vault prefer` records `prefer: { winner: [losers] }`. `applyPrefer` marks the losers with `deferTo`, which hides them from the index and swaps them for the winner in search, routes and plans.
+
+See [skill-manager.md](skill-manager.md).
 
 ## MCP server
 

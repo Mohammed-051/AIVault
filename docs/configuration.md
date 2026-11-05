@@ -35,7 +35,13 @@
   "security": { "block": "critical", "external": "auto" },
 
   // Skill Lock: when an update waits for your review. "permissions" (default) | "code" | "any"
-  "lock": { "hold": "permissions" }
+  "lock": { "hold": "permissions" },
+
+  // Written by `vault prefer`: the winner for a job, and the look-alikes it replaces.
+  "prefer": { "test-driven-development": ["tdd-workflow"] },
+
+  // Written by `vault link <agent>`: agents installed into ~/.claude/agents (kept in sync with approved updates).
+  "linked": {}
 }
 ```
 

@@ -59,6 +59,17 @@ function firstParagraph(md) {
   return out.join(' ');
 }
 
+// The first few headings say what a skill really covers, even when its description is a bare trigger.
+export function headings(body, max = 160) {
+  const hs = [];
+  for (const m of body.replace(/```[\s\S]*?```/g, '').matchAll(/^#{1,3}\s+(.+)$/gm)) {
+    const h = m[1].replace(/[`*_#\[\]()]/g, '').trim();
+    if (h && !/^(overview|introduction|usage|examples?|notes?|summary|references?|when to use|instructions|quick start|contents)$/i.test(h)) hs.push(h);
+    if (hs.join(' · ').length > max) break;
+  }
+  return hs.join(' · ').slice(0, max);
+}
+
 // ---------- classification ----------
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const RX = DOMAINS.map((d) => ({ id: d.id, rx: d.keywords.map((k) => new RegExp(`(^|[^a-z0-9+])${esc(k)}`, 'i')) }));
@@ -81,13 +92,14 @@ export function classify(name, desc, relPath) {
 // ---------- repo scan ----------
 export function scanRepo(root, opts = {}) {
   const descMax = opts.descChars || 150;
-  const skills = []; const pkgs = []; const pyprojects = [];
+  const skills = []; const pkgs = []; const pyprojects = []; const agentFiles = [];
   let hasServerJson = false, hasPlugin = false, readme = null, fileCount = 0;
 
   walk(root, 0, (full, name, depth) => {
     fileCount++;
     const lower = name.toLowerCase();
     if (lower === 'skill.md') skills.push(full);
+    else if (lower.endsWith('.md') && path.basename(path.dirname(full)).toLowerCase() === 'agents' && lower !== 'readme.md') agentFiles.push(full);
     else if (lower === 'package.json' && depth <= 2) pkgs.push(full);
     else if (lower === 'pyproject.toml' && depth <= 2) pyprojects.push(full);
     else if (lower === 'server.json' && depth <= 1) hasServerJson = true;
@@ -109,7 +121,32 @@ export function scanRepo(root, opts = {}) {
     if (/^template(-skill)?$/i.test(name) || /^replace with/i.test(desc)) continue;
     const internal = relPath.split('/').slice(0, -1).some((seg) => seg.startsWith('.'));
     const hash = crypto.createHash('sha1').update(text).digest('hex').slice(0, 12);
-    byName.set(key, { name, desc, relPath, hash, internal, bytes: Buffer.byteLength(text), ...classify(name, desc, relPath) });
+    byName.set(key, { name, desc, relPath, hash, internal, bytes: Buffer.byteLength(text), heads: headings(body), ...classify(name, desc, relPath) });
+  }
+
+  // Subagents: agents/<name>.md with name + description frontmatter (Claude Code format).
+  // Agents inside a skill folder belong to that skill; translations under docs/ are skipped.
+  const skillDirs = new Set(skills.map((f) => path.dirname(f)));
+  const agents = []; const agentNames = new Set();
+  const depthOf = (f) => path.relative(root, f).split(path.sep).length;
+  const hidden = (f) => path.relative(root, f).split(path.sep).slice(0, -1).some((x) => x.startsWith('.'));
+  for (const f of agentFiles.sort((a, b) => hidden(a) - hidden(b) || depthOf(a) - depthOf(b) || a.localeCompare(b))) {
+    const relPath = path.relative(root, f).split(path.sep).join('/');
+    const segs = relPath.split('/').slice(0, -1).map((x) => x.toLowerCase());
+    if (segs.some((x) => ['docs', 'doc', 'examples', 'example', 'i18n', 'translations', 'locales', 'templates'].includes(x))) continue;
+    let d = path.dirname(f); let inSkill = false;
+    while (d.length >= root.length && d !== path.dirname(d)) { if (skillDirs.has(d)) { inSkill = true; break; } if (d === root) break; d = path.dirname(d); }
+    if (inSkill) continue;
+    let text; try { text = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    const { data, body } = frontmatter(text);
+    if (!data.name || !data.description || !/^[\w .:-]{1,80}$/.test(data.name)) continue;
+    const key = data.name.toLowerCase().trim().replace(/\s+/g, '-');
+    if (agentNames.has(key)) continue;
+    agentNames.add(key);
+    const desc = cleanDesc(data.description, descMax);
+    const internal = segs.some((seg) => seg.startsWith('.'));
+    agents.push({ name: data.name.trim(), desc, relPath, internal, heads: headings(body), tools: String(data.tools || '').replace(/[\[\]"']/g, ' ').split(/[\s,]+/).filter((t) => t && t !== '-').join(', '), model: data.model || '',
+      hash: crypto.createHash('sha1').update(text).digest('hex').slice(0, 12), ...classify(data.name, desc, relPath) });
   }
 
   // Kind signals
@@ -152,7 +189,7 @@ export function scanRepo(root, opts = {}) {
 
   const summary = cleanDesc(firstParagraph(readmeText), 200);
   return {
-    kind, skills: all, plugin: hasPlugin, mcp, mcpServers, catalog: isCatalog,
+    kind, skills: all, agents, plugin: hasPlugin, mcp, mcpServers, catalog: isCatalog,
     readme: readme ? path.relative(root, readme).split(path.sep).join('/') : null, summary,
     repoClass: classify(base, summary, ''),
   };

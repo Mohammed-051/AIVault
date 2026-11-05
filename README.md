@@ -9,7 +9,9 @@
   <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-success">
 </p>
 
-**AIVault gives agent skills a lockfile and permissions.** It pins every skill to the version you approved and labels what each one can do (network, secrets, `git push`, writing outside the project). When an update gives a skill new powers, AIVault holds it until you've seen the change. It also files your skills and routes your agent to the one to three skills a task needs.
+**AIVault gives agent skills a lockfile and permissions.** It pins every skill and subagent to the version you approved and labels what each one can do (network, secrets, `git push`, writing outside the project). When an update gives one new powers, AIVault holds it until you've seen the change.
+
+It also manages a library of mixed packages as one team. Your agent gets a phase-by-phase playbook (discover → plan → build → verify → review → ship) naming the right skill and specialist agent for each step. Look-alike skills from different packages are grouped, so you pick one winner per job.
 
 *Know what your agent was told to do, and when it changed.*
 
@@ -32,7 +34,11 @@ AIVault answers a different question from a scanner. Not *"is this repo safe rig
 - **Update review.** `vault update` stages and scans each new version and compares it with the lock. Updates with no new permissions apply on their own. Updates that add permissions, or scan worse, are held, and your agent keeps using the approved version until you run `vault approve` or `vault reject`.
 - **Tamper refusal.** `vault_read` checks the hash of every file it serves. A file changed or added since approval is refused, whoever changed it.
 - **Security gate.** Every new repo is cloned into quarantine and checked against 36 static rules for malware, backdoors, credential theft and prompt injection. [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector) or [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) also run when they're installed.
-- **Router.** A compact `dashboard.md` (about 1.7k tokens), per-domain indexes and a `vault_route` tool keep the context small. The agent never reads the library directly, only the skills a task needs.
+- **Phase playbooks.** `vault_plan` turns a task into phases and picks the skills and subagents for each one: task-specific first, then general process skills (TDD, planning, code review, copy-editing). Skills built for another stack are left out. Your agent acts as the manager, calling `vault_route` with each phase as it starts and handing phases to specialist agents.
+- **Agents as first-class items.** Subagents shipped by packages (71 in everything-claude-code, 33 in get-shit-done) are indexed by phase. They carry permissions from their `tools:` line and are locked like skills. `vault link` installs one for Claude Code.
+- **Overlaps and preferences.** `vault overlaps` finds skills from different packages that do the same job, and `vault prefer` makes one the winner. The others leave the index and routes but stay searchable.
+- **Usage.** `vault usage` shows which skills actually get opened, and which sources never are.
+- **Router.** A compact `dashboard.md` (about 1.7k tokens), per-domain indexes and a `vault_route` tool keep the context small. The agent never reads the library directly, only what a task needs.
 - **One MCP server and a setup wizard.** Setup registers the server with Claude Desktop (including the Microsoft Store build), Claude Code, Cursor, Windsurf and VS Code, and backs up each config first.
 
 It runs on Windows, macOS and Linux with Node.js 18+ and git, and has no other dependencies.
@@ -42,6 +48,7 @@ It runs on Windows, macOS and Linux with Node.js 18+ and git, and has no other d
 - [Installation](#installation)
 - [Usage](#usage)
 - [Skill Lock](#skill-lock)
+- [Skill manager](#skill-manager)
 - [Security model](#security-model)
 - [Routing](#routing)
 - [Performance](#performance)
@@ -103,7 +110,11 @@ Candidate skills (pick at most 2, open the path):
 | `vault permissions [skill \| source]` | What skills are allowed to do |
 | `vault verify` | Check every skill file against `vault.lock` |
 | `vault scan [name \| all \| url]` | Security-scan installed sources, or preview a repository |
-| `vault route "<task>"` · `vault search <terms>` | What an agent would load for a task; keyword search |
+| `vault plan "<task>"` | Phase-by-phase playbook of skills and agents |
+| `vault route "<task>" [--phase p]` · `vault search <terms>` | What an agent would load for a task or one phase; keyword search |
+| `vault overlaps` · `vault prefer <id>` · `vault unprefer <id>` | Find look-alike skills across packages; pick one per job |
+| `vault usage` | Most-used skills and agents; sources never opened |
+| `vault link <skill \| agent>` · `vault unlink <agent>` | Expose a skill or install an agent for Claude Code |
 | `vault new-project "<name>"` · `vault new-skill <name>` | Project memory file; your own skill in `local/skills/` |
 | `vault sync` | Clone missing sources at their locked commits (new machine) |
 | `vault pack [name]` · `vault export [name]` | Install or share a list of sources |
@@ -154,6 +165,32 @@ Sources added before Skill Lock existed are pinned the first time it sees them.
 **Who can approve.** Only you. The MCP server exposes `vault_review` and `vault_permissions`, both read-only, but no approve tool, and `vault approve` asks for confirmation at a terminal.
 
 **Limits.** Permissions are inferred by reading files, not by running them, so a deliberately obfuscated skill can hide what it does. Skill Lock controls which instructions reach your agent and tells the agent their limits; it doesn't sandbox the agent's own tools. Full details are in [docs/skill-lock.md](docs/skill-lock.md).
+
+## Skill manager
+
+```console
+$ vault plan "fix a rendering bug in my C++ OpenGL rasterizer"
+1. Discover — research, requirements, brainstorming, exploring a codebase or topic
+   skill: brainstorming                       agent: code-explorer
+2. Plan — outline, spec, architecture, task breakdown, strategy
+   skill: writing-plans                       agent: architect
+3. Build — implement, draft, create, generate
+   skill: test-driven-development             agent: tdd-guide
+4. Verify — test, debug, fix errors, fact-check, proofread
+   skill: cpp-testing                         agent: cpp-build-resolver
+5. Review — code review, security review, editorial critique, audits
+   skill: requesting-code-review              agent: cpp-reviewer
+6. Ship — release, deploy, publish, docs, commit/PR, announce
+   skill: finishing-a-development-branch {publishes,deletes}
+```
+
+This was a real run (condensed) on a vault with eight popular packages: 1,262 skills and 105 agents. It mixes Superpowers' process skills with everything-claude-code's C++ specialists. It doesn't offer `laravel-tdd` or `django-build-resolver`, because the task doesn't mention those stacks. For "write and publish a launch blog post" the same vault returns a content-research skill, then content strategy, article writing, copy-editing, an SEO audit and the launch skill.
+
+- **Manager protocol.** The dashboard and agent instructions tell your agent to call `vault_plan` for multi-step work, then `vault_route` with `phase` at the start of each phase. It hands a phase to the suggested agent when it can run subagents (Claude Code: `vault link <agent>`). Otherwise it follows the agent's file itself.
+- **Overlaps.** Skills are grouped only when every member resembles every other, so specialized variants aren't lumped in with generic ones. `vault prefer` records your pick in `vault.json`.
+- **Usage.** Counts stay local, in `.vault/usage.json`. `vault doctor` also warns when `~/.claude/skills` holds more skills than Claude Code can list reliably.
+
+Details are in [docs/skill-manager.md](docs/skill-manager.md).
 
 ## Security model
 
@@ -221,7 +258,9 @@ Only the selected `SKILL.md` files are loaded in full.
 
 | Tool | Purpose |
 |---|---|
-| `vault_route` | Files to load for a task, with permission tags |
+| `vault_route` | Files to load for a task, or for one phase of it, with permission tags and a suggested agent |
+| `vault_plan` | Phase-by-phase playbook of skills and agents for multi-step work |
+| `vault_overlaps`, `vault_prefer`, `vault_usage` | Look-alike skills across packages, the user's pick per job, and usage |
 | `vault_read` | Read a vault file: sandboxed and read-only; refuses tampered files; opens skills with their approved permissions |
 | `vault_memory` | List, read, or append to project memory |
 | `vault_search`, `vault_list` | Discover skills and sources |
@@ -239,13 +278,14 @@ For clients that setup doesn't detect, print the configuration with `vault mcp-c
 | [Vercel `skills`](https://github.com/vercel-labs/skills) | folder hashes | — | — | — | — | search | installs into many agents |
 | [skills-lock](https://github.com/luisalima/skills-lock) | commits + hashes | — | — (explicit `update`) | at install (`--frozen`) | — | — | — |
 | [SkillSpector](https://github.com/NVIDIA/skillspector), [skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) | — | — | — | — | deep (Python) | — | — |
-| **AIVault** | commits + file hashes | 11 kinds, shown to the agent | yes, with diffs | yes | built in; uses the above when present | BM25 + project memory | 5 clients |
+| **AIVault** | commits + file hashes, skills and agents | 13 kinds, shown to the agent | yes, with diffs | yes | built in; uses the above when present | BM25, phase playbooks, agents, overlaps, project memory | 5 clients |
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [docs/skill-lock.md](docs/skill-lock.md) | Lockfile format, permission rules, update flow, hold policy, limits |
+| [docs/skill-manager.md](docs/skill-manager.md) | Phases, playbooks, agents, overlaps, preferences, usage |
 | [docs/security.md](docs/security.md) | Threat model, all scanner rules, severity adjustments, calibration |
 | [docs/architecture.md](docs/architecture.md) | Directory layout, add and update pipelines, indexing and routing |
 | [docs/configuration.md](docs/configuration.md) | `vault.json`: profiles, pins, overrides, security and lock policy |

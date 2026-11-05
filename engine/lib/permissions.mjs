@@ -10,6 +10,8 @@ export const PERM = {
   shell: ['low', 'runs commands'],
   script: ['low', 'runs bundled scripts'],
   install: ['low', 'installs packages'],
+  mcp: ['low', 'uses MCP servers'],
+  alltools: ['medium', 'inherits every tool (no tools: limit)'],
   net: ['medium', 'network'],
   secret: ['medium', 'reads secrets'],
   delete: ['medium', 'deletes files or history'],
@@ -20,7 +22,7 @@ export const PERM = {
   schedule: ['high', 'schedules background jobs'],
 };
 export const LEVEL = { low: 1, medium: 2, high: 3 };
-export const SHORT = { net: 'net', secret: 'secrets', delete: 'deletes', publish: 'publishes', write: 'writes-global', agent: 'agent-config', admin: 'admin', schedule: 'schedules' };
+export const SHORT = { alltools: 'all-tools', net: 'net', secret: 'secrets', delete: 'deletes', publish: 'publishes', write: 'writes-global', agent: 'agent-config', admin: 'admin', schedule: 'schedules' };
 
 const kindOf = (t) => t.split(':')[0];
 export const levelOf = (t) => LEVEL[PERM[kindOf(t)]?.[0] || 'low'];
@@ -178,13 +180,26 @@ export function inferSkill(dir, listing = skillFiles(dir)) {
   return [...set].sort();
 }
 
+// A subagent file: its `tools:` line says what it may use; its body is read like a SKILL.md.
+export function inferAgent(full, tools = '') {
+  const set = new Set(inferSkill(path.dirname(full), { files: [{ full, rel: path.basename(full), ext: '.md', size: 0 }] }).filter((t) => !t.startsWith('script:')));
+  const list = String(tools).split(/[\s,]+/).filter(Boolean);
+  if (!list.length) set.add('alltools');
+  for (const t of list) {
+    if (/^bash$|^powershell$/i.test(t)) set.add('shell');
+    else if (/^web(fetch|search)$/i.test(t)) set.add('net:web');
+    else if (/^mcp__/i.test(t)) set.add(`mcp:${t.split('__')[1] || t}`.replace(/\*$/, ''));
+  }
+  return [...set].sort();
+}
+
 // ---------- presentation ----------
 export function group(tokens = []) {
   const g = {};
   for (const t of tokens) { const [k, ...rest] = t.split(':'); (g[k] ||= []).push(rest.join(':')); }
   return g;
 }
-const ORDER = ['agent', 'admin', 'schedule', 'write', 'secret', 'net', 'publish', 'delete', 'install', 'script', 'shell'];
+const ORDER = ['agent', 'admin', 'schedule', 'write', 'alltools', 'secret', 'net', 'publish', 'delete', 'install', 'mcp', 'script', 'shell'];
 
 // "runs commands · network: api.x.com, y.io · reads secrets: OPENAI_API_KEY"
 export function describe(tokens = [], { max = 4 } = {}) {
@@ -192,7 +207,7 @@ export function describe(tokens = [], { max = 4 } = {}) {
   if (!tokens.length) return 'none detected (text only)';
   return ORDER.filter((k) => g[k]).map((k) => {
     const label = PERM[k][1];
-    const details = g[k].filter(Boolean).map((d) => (d === '*' ? 'hosts not fixed in code' : d));
+    const details = g[k].filter(Boolean).map((d) => (d === '*' ? 'hosts not fixed in code' : d === 'web' ? 'web search / fetch' : d));
     if (!details.length) return label;
     return `${label}: ${details.slice(0, max).join(', ')}${details.length > max ? ` +${details.length - max}` : ''}`;
   }).join(' · ');

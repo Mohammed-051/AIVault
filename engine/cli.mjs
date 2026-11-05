@@ -32,7 +32,16 @@ Library
   vault sync                       Clone anything in vault.json that's missing (new machine)
   vault index                      Rebuild dashboard.md and index/*.md
   vault search <words>             Find skills
-  vault route "<task>"             What an agent should load for a task
+  vault route "<task>" [--phase p] What an agent should load for a task (or for one phase of it)
+
+Skill manager
+  vault plan "<task>"              Phase-by-phase playbook: skills and agents for discover → plan → build →
+                                   verify → review → ship
+  vault overlaps [source|domain]   Look-alike skills/agents from different packages that do the same job
+  vault prefer <id> [--over a,b]   Pick the winner for a job; the others leave routes, plans and the index
+  vault unprefer <id>              Undo a preference
+  vault usage                      Which skills and agents actually get opened; sources never used
+  vault link <agent>               Install a subagent into ~/.claude/agents for Claude Code (unlink to remove)
   vault list [kind|domain|name]    List sources or a domain's skills
   vault doctor                     Check for broken paths, size budget, empty memory
   vault new-project "<name>" [--type dev|writing|content|media|research|business]
@@ -54,7 +63,7 @@ function parse(argv) {
       const [k, v] = a.slice(2).split('=');
       const key = k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
       if (v !== undefined) flags[key] = v;
-      else if (argv[i + 1] && !argv[i + 1].startsWith('--') && !['dryRun', 'force', 'includeInternal', 'allowRisky', 'yes', 'noClose', 'noPacks', 'noPath', 'noClipboard', 'vscode'].includes(key)) flags[key] = argv[++i];
+      else if (argv[i + 1] && !argv[i + 1].startsWith('--') && !['dryRun', 'force', 'includeInternal', 'allowRisky', 'yes', 'noClose', 'noPacks', 'noPath', 'noClipboard', 'vscode', 'all'].includes(key)) flags[key] = argv[++i];
       else flags[key] = true;
     } else args.push(a);
   }
@@ -71,10 +80,12 @@ const table = {
   update: () => cmd.update(rest[0]), review: () => cmd.review(rest[0]), diff: () => cmd.review(rest[0]),
   approve: () => cmd.approve(rest[0], flags), reject: () => cmd.reject(rest[0]), verify: () => cmd.verify(),
   permissions: () => cmd.permissions(rest.join(' ') || undefined), perms: () => cmd.permissions(rest.join(' ') || undefined), sync: () => cmd.sync(), index: () => cmd.index(),
-  search: () => cmd.find(rest.join(' ')), route: () => cmd.routeTask(rest.join(' ')),
+  search: () => cmd.find(rest.join(' ')), route: () => cmd.routeTask(rest.join(' '), flags),
   list: () => cmd.list(rest[0]), ls: () => cmd.list(rest[0]), doctor: () => cmd.doctor(),
   'new-project': () => cmd.newProject(rest.join(' '), flags), 'new-skill': () => cmd.newSkill(rest[0]),
-  link: () => cmd.link(rest[0], flags), pack: () => cmd.pack(rest[0]), export: () => cmd.exportPack(rest[0]),
+  link: () => cmd.link(rest[0], flags), unlink: () => cmd.unlink(rest[0]),
+  plan: () => cmd.plan(rest.join(' ')), overlaps: () => cmd.overlaps(rest[0], flags), prefer: () => cmd.prefer(rest[0], flags),
+  unprefer: () => cmd.unprefer(rest[0]), usage: () => cmd.usage(), pack: () => cmd.pack(rest[0]), export: () => cmd.exportPack(rest[0]),
   migrate: () => cmd.migrate(), init: () => cmd.init(), 'mcp-config': () => cmd.mcpConfig(), connect: () => cmd.connect(flags),
   scan: () => cmd.scan(rest[0]), setup: () => cmd.setup(flags), version: () => [`aivault ${VERSION}`],
 };
